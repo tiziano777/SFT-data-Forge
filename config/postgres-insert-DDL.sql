@@ -823,7 +823,7 @@ INSERT INTO
     )
 VALUES (
         '18bf9811-7285-4841-9b56-3b59a0e74499',
-        'file:///Users/T.Finizzi/repo/ETL_agent/nfs/data-download/velvet_v1/allenai',
+        'file:///Users/T.Finizzi/repo/SFT-data-Forge/nfs/data-download/velvet_v1/allenai',
         'e79a8506-fe8e-456e-b5bb-ec3ee2d2a5bb',
         NULL,
         'benchmark',
@@ -859,7 +859,7 @@ INSERT INTO
     )
 VALUES (
         '18bf9811-7285-4841-9b56-3b59a0e74400',
-        'file:///Users/T.Finizzi/repo/ETL_agent/nfs/processed-data/velvet_v1/allenai',
+        'file:///Users/T.Finizzi/repo/SFT-data-Forge/nfs/processed-data/velvet_v1/allenai',
         'e79a8506-fe8e-456e-b5bb-ec3ee2d2a5bb',
         '18bf9811-7285-4841-9b56-3b59a0e74499',
         'benchmark',
@@ -895,7 +895,7 @@ INSERT INTO
     )
 VALUES (
         '18bf9811-7285-4841-9b56-3b59a0e74420',
-        'file:///Users/T.Finizzi/repo/ETL_agent/nfs/mapped-data/velvet_v1/allenai',
+        'file:///Users/T.Finizzi/repo/SFT-data-Forge/nfs/mapped-data/velvet_v1/allenai',
         'e79a8506-fe8e-456e-b5bb-ec3ee2d2a5bb',
         '18bf9811-7285-4841-9b56-3b59a0e74400',
         'unknown',
@@ -939,7 +939,7 @@ INSERT INTO
     )
 VALUES (
         'bb13ddbd-e11b-462f-9417-35a4cb95b87a',
-        'file:///Users/T.Finizzi/repo/ETL_agent/nfs/data-download/velvet_v1/allenai/ai2_arc/ARC-Challenge',
+        'file:///Users/T.Finizzi/repo/SFT-data-Forge/nfs/data-download/velvet_v1/allenai/ai2_arc/ARC-Challenge',
         NULL,
         '18bf9811-7285-4841-9b56-3b59a0e74499',
         1,
@@ -985,7 +985,7 @@ INSERT INTO
     )
 VALUES (
         '3df02834-896d-466c-a082-0274e9254b83',
-        'file:///Users/T.Finizzi/repo/ETL_agent/nfs/processed-data/velvet_v1/allenai/ai2_arc/ARC-Challenge/en',
+        'file:///Users/T.Finizzi/repo/SFT-data-Forge/nfs/processed-data/velvet_v1/allenai/ai2_arc/ARC-Challenge/en',
         NULL,
         '18bf9811-7285-4841-9b56-3b59a0e74400',
         2,
@@ -1031,7 +1031,7 @@ INSERT INTO
     )
 VALUES (
         'a9a55ac3-e220-480d-a06e-cc4005960414',
-        'file:///Users/T.Finizzi/repo/ETL_agent/nfs/mapped-data/velvet_v1/allenai/ai2_arc/ARC-Challenge/en',
+        'file:///Users/T.Finizzi/repo/SFT-data-Forge/nfs/mapped-data/velvet_v1/allenai/ai2_arc/ARC-Challenge/en',
         NULL,
         '18bf9811-7285-4841-9b56-3b59a0e74420',
         '*.jsonl.gz',

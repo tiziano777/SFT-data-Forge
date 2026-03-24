@@ -12,7 +12,7 @@ _lines_long_char_10000 | numero di linee con più di dieci mila caratteri
 _token_count		| Numero token stimati, richiede lingua e default strategy
 _unigram_entropy        | measures the diversity of the content sum{x}{ x/n log(1/n) }
 _stop_word_ratio          |  stopwords_count(_lang) / _word_count 
-STOPWORDS URL:  [/Users/T.Finizzi/repo/ETL_agent/config/lang_options.json]
+STOPWORDS URL:  [/Users/T.Finizzi/repo/SFT-data-Forge/config/lang_options.json]
 _symbol_to_word_ratio | Symbols are defined as U+0023 (#), "...", and U+2026
 _char_symbol_count               | Simboli (@, #, $, %, &, *, +, =, etc.)
 _char_punctuation_count          | Punteggiatura (. , ! ? ; : )

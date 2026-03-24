@@ -1,0 +1,291 @@
+{
+  "un": {
+    "639-1": "und",
+    "639-2": "und",
+    "family": "Unknown",
+    "name": "Undetermined",
+    "nativeName": "Undetermined",
+    "wikiUrl": "https://en.wikipedia.org/wiki/ISO_639-2#List_of_ISO_639-2_codes"
+  },
+  "ar": {
+    "639-1": "ar",
+    "639-2": "ara",
+    "family": "Afro-Asiatic",
+    "name": "Arabic",
+    "nativeName": "العربية",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Arabic_language"
+  },
+  "bg": {
+    "639-1": "bg",
+    "639-2": "bul",
+    "family": "Indo-European",
+    "name": "Bulgarian",
+    "nativeName": "български език",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Bulgarian_language"
+  },
+  "ca": {
+    "639-1": "ca",
+    "639-2": "cat",
+    "family": "Indo-European",
+    "name": "Catalan",
+    "nativeName": "català",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Catalan_language"
+  },
+  "cs": {
+    "639-1": "cs",
+    "639-2": "ces",
+    "639-2/B": "cze",
+    "family": "Indo-European",
+    "name": "Czech",
+    "nativeName": "čeština, český jazyk",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Czech_language"
+  },
+  "da": {
+    "639-1": "da",
+    "639-2": "dan",
+    "family": "Indo-European",
+    "name": "Danish",
+    "nativeName": "dansk",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Danish_language"
+  },
+  "de": {
+    "639-1": "de",
+    "639-2": "deu",
+    "639-2/B": "ger",
+    "family": "Indo-European",
+    "name": "German",
+    "nativeName": "Deutsch",
+    "wikiUrl": "https://en.wikipedia.org/wiki/German_language"
+  },
+  "el": {
+    "639-1": "el",
+    "639-2": "ell",
+    "639-2/B": "gre",
+    "family": "Indo-European",
+    "name": "Greek (modern)",
+    "nativeName": "ελληνικά",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Greek_language"
+  },
+  "en": {
+    "639-1": "en",
+    "639-2": "eng",
+    "family": "Indo-European",
+    "name": "English",
+    "nativeName": "English",
+    "wikiUrl": "https://en.wikipedia.org/wiki/English_language"
+  },
+  "es": {
+    "639-1": "es",
+    "639-2": "spa",
+    "family": "Indo-European",
+    "name": "Spanish",
+    "nativeName": "Español",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Spanish_language"
+  },
+  "et": {
+    "639-1": "et",
+    "639-2": "est",
+    "family": "Uralic",
+    "name": "Estonian",
+    "nativeName": "eesti, eesti keel",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Estonian_language"
+  },
+  "eu": {
+    "639-1": "eu",
+    "639-2": "eus",
+    "639-2/B": "baq",
+    "family": "Language isolate",
+    "name": "Basque",
+    "nativeName": "euskara, euskera",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Basque_language"
+  },
+  "fi": {
+    "639-1": "fi",
+    "639-2": "fin",
+    "family": "Uralic",
+    "name": "Finnish",
+    "nativeName": "suomi, suomen kieli",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Finnish_language"
+  },
+  "fr": {
+    "639-1": "fr",
+    "639-2": "fra",
+    "639-2/B": "fre",
+    "family": "Indo-European",
+    "name": "French",
+    "nativeName": "français, langue française",
+    "wikiUrl": "https://en.wikipedia.org/wiki/French_language"
+  },
+  "ga": {
+    "639-1": "ga",
+    "639-2": "gle",
+    "family": "Indo-European",
+    "name": "Irish",
+    "nativeName": "Gaeilge",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Irish_language"
+  },
+  "hi": {
+    "639-1": "hi",
+    "639-2": "hin",
+    "family": "Indo-European",
+    "name": "Hindi",
+    "nativeName": "हिन्दी, हिंदी",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Hindi"
+  },
+  "hr": {
+    "639-1": "hr",
+    "639-2": "hrv",
+    "family": "Indo-European",
+    "name": "Croatian",
+    "nativeName": "hrvatski jezik",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Croatian_language"
+  },
+  "hu": {
+    "639-1": "hu",
+    "639-2": "hun",
+    "family": "Uralic",
+    "name": "Hungarian",
+    "nativeName": "magyar",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Hungarian_language"
+  },
+  "it": {
+    "639-1": "it",
+    "639-2": "ita",
+    "family": "Indo-European",
+    "name": "Italian",
+    "nativeName": "Italiano",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Italian_language"
+  },
+  "ja": {
+    "639-1": "ja",
+    "639-2": "jpn",
+    "family": "Japonic",
+    "name": "Japanese",
+    "nativeName": "日本語 (にほんご)",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Japanese_language"
+  },
+  "ko": {
+    "639-1": "ko",
+    "639-2": "kor",
+    "family": "Koreanic",
+    "name": "Korean",
+    "nativeName": "한국어",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Korean_language"
+  },
+  "lt": {
+    "639-1": "lt",
+    "639-2": "lit",
+    "family": "Indo-European",
+    "name": "Lithuanian",
+    "nativeName": "lietuvių kalba",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Lithuanian_language"
+  },
+  "lv": {
+    "639-1": "lv",
+    "639-2": "lav",
+    "family": "Indo-European",
+    "name": "Latvian",
+    "nativeName": "latviešu valoda",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Latvian_language"
+  },
+  "nl": {
+    "639-1": "nl",
+    "639-2": "nld",
+    "639-2/B": "dut",
+    "family": "Indo-European",
+    "name": "Dutch",
+    "nativeName": "Nederlands, Vlaams",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Dutch_language"
+  },
+  "no": {
+    "639-1": "no",
+    "639-2": "nor",
+    "family": "Indo-European",
+    "name": "Norwegian",
+    "nativeName": "Norsk",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Norwegian_language"
+  },
+  "pl": {
+    "639-1": "pl",
+    "639-2": "pol",
+    "family": "Indo-European",
+    "name": "Polish",
+    "nativeName": "język polski, polszczyzna",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Polish_language"
+  },
+  "pt": {
+    "639-1": "pt",
+    "639-2": "por",
+    "family": "Indo-European",
+    "name": "Portuguese",
+    "nativeName": "Português",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Portuguese_language"
+  },
+  "ro": {
+    "639-1": "ro",
+    "639-2": "ron",
+    "639-2/B": "rum",
+    "family": "Indo-European",
+    "name": "Romanian",
+    "nativeName": "Română",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Romanian_language"
+  },
+  "ru": {
+    "639-1": "ru",
+    "639-2": "rus",
+    "family": "Indo-European",
+    "name": "Russian",
+    "nativeName": "Русский",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Russian_language"
+  },
+  "sk": {
+    "639-1": "sk",
+    "639-2": "slk",
+    "639-2/B": "slo",
+    "family": "Indo-European",
+    "name": "Slovak",
+    "nativeName": "slovenčina, slovenský jazyk",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Slovak_language"
+  },
+  "sl": {
+    "639-1": "sl",
+    "639-2": "slv",
+    "family": "Indo-European",
+    "name": "Slovene",
+    "nativeName": "slovenski jezik, slovenščina",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Slovene_language"
+  },
+  "sr": {
+    "639-1": "sr",
+    "639-2": "srp",
+    "family": "Indo-European",
+    "name": "Serbian",
+    "nativeName": "српски језик",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Serbian_language"
+  },
+  "sv": {
+    "639-1": "sv",
+    "639-2": "swe",
+    "family": "Indo-European",
+    "name": "Swedish",
+    "nativeName": "svenska",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Swedish_language"
+  },
+  "uk": {
+    "639-1": "uk",
+    "639-2": "ukr",
+    "family": "Indo-European",
+    "name": "Ukrainian",
+    "nativeName": "Українська",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Ukrainian_language"
+  },
+  "zh": {
+    "639-1": "zh",
+    "639-2": "zho",
+    "639-2/B": "chi",
+    "family": "Sino-Tibetan",
+    "name": "Chinese",
+    "nativeName": "中文 (Zhōngwén), 汉语, 漢語",
+    "wikiUrl": "https://en.wikipedia.org/wiki/Chinese_language"
+  }
+}

@@ -1,0 +1,111 @@
+source_schema_extraction_prompt: >
+  You are a meticulous and critic data engineer.
+  Review the following JSON schema for accuracy and completeness based on the provided samples.
+
+  Samples:
+  {samples}
+
+  Proposed Schema:
+  {actual_schema}
+
+  Ensure the schema accurately reflects the structure and data types present in the samples.
+  If not, respond providing ONLY a corrected version of the schema in JSON format.
+
+feedback_prompt: >
+  \n
+  Additional feedback:
+  {feedback}
+
+######################################################
+
+# Content Mapping Inference prompt
+mapping_schema_prompt: >
+  You are an expert data transformation Human in the loop mapping agent.
+  Your task is to generate a JSON mapping file that describes how to transform data from a source (src) JSON schema to a destination (target) JSON schema.
+  The mapping file must be in a standard JSON, format Dict[str, List[Any]].
+
+  ## Mapping Syntax and Rules
+  The output JSON **must** be an object where:
+  0. YOU MUST USE DOT NOTATION; NO NESTING OF OBJECTS IS ALLOWED. USE for EXAMPLE `messages[0].content` instead OF NESTING OBJECTS.
+  1.  **Key**: Is the **destination path** in dot notation (e.g., `k1.k2` or `k1[0].k2` or `k1[].k2`).
+  2.  **Value**: Is an **array** representing the transformation operation.
+  
+  
+  ### Transformation Operations:
+
+  **A. Simple Mapping:**
+  Use a single string containing the source path.
+  * **Example**: `"dst_field_path": ["src_field_path"]`
+
+  **B. Function Call Mapping**
+  Use an array where the first element is the function name.
+  * **Syntax**: `"dst_path": ["function_name", "arg1", "arg2", ...]`
+  * Arguments (`argN`) can be:
+      * **src_path**: Strings containing a path (e.g., `k1.k2`). These paths will be **resolved to their value** before the function call.
+      * **fixed_str**: string or null value
+
+  ### Available Core Functions:
+  | `set_fixed_value`: Set to a fixed value | `["set_fixed_value", <fixed_str | src_path | null> ]` |
+  | `serialize_to_json_list`: Serializes a Python object to a JSON string and returns it in a list. | `["serialize_to_json_list", <fixed_str | src_path> ]` |
+  | `concat`: Concatenates multiple string values. | `["concat", <fixed_str1 | src_path1>, ...]` |
+  | `map_enum`: Maps a source value to a destination value using a dictionary. | `["map_enum", "src_path", {{"src_val1": "dst_val1", ...}}]` |
+  | `remove_strings`: Remove fixed strings | `["remove_strings", "tag_name", "src_path"]` |
+  | `remove_regex_strings`: Remove strings matching regex patterns | `["remove_regex_strings", "src_path", ["regex_pattern1", "regex_pattern2", ...]]` |
+  | `remove_prefix`: removes a prefix from a string field | `["remove_prefix", "prefix_to_remove", "src_path"]` |
+  | `extract_tag_content`: extracts tag content from first regex match | `["extract_tag_content",  "tag_name", "src_path"]` |
+  | `remove_tag_content`: Remove tags and their contents | `["remove_tag_content", "tag_name", "src_path"]` |
+  | `extract_and_aggregate_tag_object_content_id`: Extracts unique Content IDs via regex, removes the source tags, and concatenates the resulting clean text with the list of unique IDs. | `["extract_and_aggregate_tag_object_content_id", "src_path", "start_tag_regex", "end_tag_regex", "joiner_str | " "]` |
+  | `insert_lang_system_prompt`: Inserts a language system prompt into the text. | `["insert_lang_system_prompt", "lang_two_digits"]` |
+  
+  ### Complex Transformations:
+  - If the feedback exposes the need for more complex transformations, the user can pass custom mapping definitions.
+  - You should follow the custom instructions, example: ... "key":["custom_function", "my_args"], ...
+
+  ### Additional information:
+  - For dynamic arrays, use `[]` in the destination or source path to indicate element-by-element mapping.
+  - For fixed length arrays, use `[0]`, `[1]`, etc.
+  - The mapping should cover all fields in the target schema.
+  - Some info can be extracted at high level from metadata info. Use it when needed, by using "set_fixed_value" function.
+  ---
+  src_schema and metadata:
+  {metadata}
+  {src_schema}
+  ---
+  dst_schema:
+  {dst_schema}
+  ---
+  actual mapping_schema:
+  {mapping_schema}
+
+mapping_schema_feedback_prompt: >
+  \n
+  Additional feedback:
+  {feedback}
+
+######################################################
+
+distribution_metadata_inference_prompt: >
+  You are a Human in the Loop dataset metadata inference agent.
+  Your task is to analyze a single text sample and infer only the metadata that can be reliably extracted from this single example — without assuming corpus-wide properties or statistics.
+  The goal is to produce a concise and structured metadata record that describes the nature, task, and functional type of the dataset this sample belongs to.
+  You must only output the fields listed below.
+
+  The output JSON **must** be an object like:
+  {{
+    "description": str,
+    "tags": List[str]
+  }}
+
+  FIELDS TO INFER:
+  "description": general natural-language summary (max 50 words) describing the purpose and apparent content of this dataset.
+  "tags": List of 3-4 relevant tags that describe the dataset's characteristics, such as "multiturn", "rag", "function_calling", "reasoning", and so forth.
+  ---
+  samples of the dataset:
+  {samples}
+
+distribution_metadata_inference_feedback_prompt: >
+  \n
+  Additional feedback:
+  {feedback}
+
+#######################################################

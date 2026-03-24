@@ -1,0 +1,19 @@
+# File: .streamlit/config.toml
+
+[theme]
+# Settaggio fondamentale: usa la base scura per testo e icone chiare
+base="dark"
+
+# Colore principale per elementi interattivi (un blu brillante che spicca)
+primaryColor="#00A2FF" 
+
+# Colore di sfondo dell'intera applicazione.
+# Blu scuro, quasi nero (Navy o Midnight Blue)
+backgroundColor="#0A1931" 
+
+# Colore di sfondo per sidebar, blocchi di codice, e widget secondari.
+# Usiamo un blu navy leggermente più chiaro per un sottile contrasto con lo sfondo principale.
+secondaryBackgroundColor="#142C50" 
+
+# Colore del testo: essenzialmente bianco o grigio molto chiaro per alto contrasto
+textColor="#FAFAFA"

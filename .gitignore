@@ -1,0 +1,12 @@
+.env
+.DS_Store
+.venv/
+__pycache__/*
+*.pyc
+logs/
+nfs/
+__pycache__/
+*.log
+.vscode/
+docker/dev/.env.dev
+docker/prod/.env.prod

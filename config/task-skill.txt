@@ -1,0 +1,23 @@
+Le task sono auto-consistenti (ogni task è ben definita e riproducibile).
+Le skill sono ancorate a task concrete (nessuna skill solo teorica).
+
+1. Il Task come "Vincolo di Ammissibilità" (Precedenza)
+La logica presuppone che il Task (l'obiettivo operativo del dataset) determini il perimetro delle Skill (capacità cognitive) che ha senso dichiarare.
+
+Esempio: Se il Task è mathematical_problem_solving, la tassonomia ammette skill come mathematical_reasoning o procedural_planning.
+
+Obiettivo: Impedire l'over-tagging. Se un utente prova a inserire la skill empathetic_modeling (empatia) su un dataset di calcolo matematico, il sistema lo impedisce perché non c'è aderenza funzionale tra l'esercizio e la capacità dichiarata.
+
+2. Simmetria del Jolly (Logica MIX)
+Per gestire l'eterogeneità dei dataset per LLM (spesso non categorizzabili in modo atomico), la coerenza segue due eccezioni controllate:
+
+Task MIX (Indeterminazione del Contenitore): Se il task è MIX, il sistema "apre le porte" a qualsiasi skill. È la logica tipica dei corpus di pre-training (es. Common Crawl), dove potenzialmente si allenano tutte le capacità.
+
+Skill MIX (Indeterminazione della Risorsa): Se una risorsa ha un task chiaro (es. text_generation) ma le abilità richieste sono troppo varie per essere isolate, la skill MIX funge da jolly universale che aderisce a qualsiasi task specifico.
+
+3. Gerarchia di Responsabilità (La "Regola del Motore")
+La logica di consistenza distingue tra Cosa e Come:
+
+Task (Cosa): È il formato del dato. È possibile avere un Task senza specificare Skill (passiamo a un livello di dettaglio inferiore, ma il dato resta valido).
+
+Skill (Come): È il "motore" cognitivo. Non è ammesso dichiarare una Skill senza un Task correlato. Se dichiari una capacità, devi dichiarare in quale esercizio pratico (Task) quella capacità viene messa alla prova.

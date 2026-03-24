@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: sft-data-forge
+Version: 0.1.0
+Summary: SFT Data Forge pipelines
+Requires-Python: >=3.9

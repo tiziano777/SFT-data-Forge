@@ -1,0 +1,78 @@
+
+Metriche Low Level :
+_word_count              | Numero totale di parole
+_word_distinct_count     | Numero di parole uniche  
+_lines_count             | Numero totale di linee
+_lines_empty_count       | Numero di linee vuote
+_char_count              | Numero totale di caratteri
+_char_distinct_count     | Numero di caratteri unici
+_char_uppercase_count    | Caratteri maiuscoli
+_lines_short_char_20 | numero di linee con meno di 20 caratteri
+_lines_long_char_10000 | numero di linee con più di dieci mila caratteri
+_token_count		| Numero token stimati, richiede lingua e default strategy
+_unigram_entropy        | measures the diversity of the content sum{x}{ x/n log(1/n) }
+_stop_word_ratio          |  stopwords_count(_lang) / _word_count 
+STOPWORDS URL:  [/Users/T.Finizzi/repo/ETL_agent/config/lang_options.json]
+_symbol_to_word_ratio | Symbols are defined as U+0023 (#), "...", and U+2026
+_char_symbol_count               | Simboli (@, #, $, %, &, *, +, =, etc.)
+_char_punctuation_count          | Punteggiatura (. , ! ? ; : )
+_char_escapes_count              | Caratteri di escape (\n, \t, \r)
+
+
+Analisi Lessicale Avanzate:
+_lines_end_ellipsis_count      | Linee che terminano con "..." or "U+2026"
+_no_alpha_count                | Parole senza caratteri alfabetici
+_mean_word_length              | Lunghezza media delle parole
+_unique_word_ratio             | Ratio parole uniche/totali
+_javascript_count              | Indicatori codice JavaScript, conta il numero di occorrenze	
+_numerical_char_ratio           | Ratio caratteri numerici
+_lines_end_punctuation          | Linee che terminano con punteggiatura
+_lines_bulletpoint_start        | Linee che iniziano con bullet points:
+The following set of unicodes are considered a bullet point: U+2022 (bullet point), U+2023 (triangular bullet point), U+25B6 (black right pointing triangle), U+25C0 (black left pointing triangle), U+25E6 (white bullet point), U+2013 (en dash) U+25A0 (black square), U+25A1 (white square), U+25AA (black small square), U+25AB (white small square).
+
+
+Special Content:
+_html_tag_count    | Tag HTML
+_xml_tag_count     | Tag XML  
+_code_count        | code triggers o Blocchi di codice
+_math_count        | Espressioni matematiche
+
+
+Metriche Template:
+_curly_brackets_count          | Parentesi graffe (indicatori JSON), foreach message.content
+_has_system                    | Presenza di system prompt
+[cost]_lang_coherence_ratio    | numero di volte che risponde con la stessa lingua della Q
+[cost]_grammar_coherence     | correttezza grammaticale
+_has_context                   | Presenza di context aggiuntivo
+_num_context	        | Numero di messaggi di context 
+_total_messages                | Numero totale di messaggi (turns)
+_has_system                 | presenza Messaggio di sistema
+_has_think                     | Presenza di ragionamento
+_has_functioncall              | Presenza di function calls
+_think_messages_count          | Numero messaggi con think
+_functioncall_messages_count   | Numero di function calls per ogni step
+_context_messages_count        | Messaggi con context
+_user_char_count          | Caratteri totali utente
+_assistant_char_count     | Caratteri totali assistant
+_system_char_count        | Caratteri totali sistema
+_think_char_count         | Caratteri totali think
+_think_to_content_ratio   | Ratio think/risposta assistant
+_think_steps        | Complessità ragionamento assistant (lines)
+_user_avg_length          | Lunghezza media messaggi user
+_assistant_avg_length     | Lunghezza media messaggi assistant
+_user_assistant_ratio     | Ratio caratteri user/assistant
+_last_interaction_ratio   | Ratio ultima interazione
+_user_ends_with_question  | Ultimo user message termina con ?
+_system_token_count 	|  Numero token del system prompt
+_user_token_count		|  Numero token totali utente
+_assistant_token_count	|  Numero token totali assistant
+_context_token_count	|  Numero token totali contesto
+_user_token_mean		|  Numero token medi per ogni turn utente
+_assistant_token_mean 	|  Numero token medi per turn assistant	
+
+Metriche Formato e Contenuto ASSISTANT:
+_assistant_has_json            | Presenza JSON nelle risposte
+_assistant_has_code            | Presenza blocchi codice
+_assistant_has_markdown        | Presenza markdown
+_assistant_has_table           | Presenza tabelle
+_assistant_ends_with_question  | Ultimo assistant message termina con ?

@@ -1,0 +1,76 @@
+services:
+  dashboard:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    image: sft-dataforge-prod:local
+    container_name: sft-dataforge-prod
+    restart: always
+    stop_grace_period: 1m
+    env_file:
+      - .env.prod
+    ports:
+      # Local bind required for Nginx
+      - "127.0.0.1:8501:8501"
+    environment:
+      - ENV=production
+      - PYTHONUNBUFFERED=1
+
+      # --- INTERNAL SERVER (ACTUAL CONTAINER PORT) ---
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+
+      # --- BASE URL CONFIGURATION (leave empty if Nginx is on /, set path if using e.g. /app) ---
+      - STREAMLIT_SERVER_BASEURL=
+
+      # --- SECURITY AND WEBSOCKET ---
+      - STREAMLIT_SERVER_COOKIE_SECRET=739dc950c7ae998c45e77c6ee37dad20478cd73c01925b3e252f389fdc4ad56d
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true
+      - STREAMLIT_SERVER_ENABLE_WEBSOCKET_COMPRESSION=true
+
+      # --- PERFORMANCE SETTINGS ---
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
+      - STREAMLIT_SERVER_RUN_ON_SAVE=false
+      - STREAMLIT_THEME_BASE=light
+      - STREAMLIT_SERVER_FILE_WATCHER_TYPE=none  # Disable file watcher in production
+
+    volumes:
+      - ../../logs:/app/logs
+      - /nfs:/app/nfs
+      - ../../config:/app/config:ro
+    shm_size: '2gb'
+
+    healthcheck:
+      # Use curl on the internal 8501 port
+      test: ["CMD-SHELL", "curl -f http://localhost:8501/_stcore/health && ls /app/nfs > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    # --- Security settings ---
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+
+    networks:
+      - sft_dataforge_network
+
+networks:
+  sft_dataforge_network:
+    driver: bridge

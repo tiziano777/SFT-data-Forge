@@ -1,31 +1,40 @@
 import gzip
 import json
+import logging
+from abc import abstractmethod
 from pathlib import Path
 from typing import Callable, IO
 
-from datatrove.pipeline.writers.jsonl import JsonlWriter
 from datatrove.data import DocumentsPipeline, Document
-from datatrove.io import DataFolder 
 from utils.path_utils import to_binded_path
 
-class CustomJsonlWriter(JsonlWriter):
+logger = logging.getLogger(__name__)
+
+
+class BaseCustomWriter:
+    """
+    Classe base astratta per i writer del mapped pipeline.
+
+    Le sottoclassi devono implementare:
+        FILE_EXTENSION (class var) - es. ".jsonl.gz" o ".parquet"
+        _open_file_handler(file_path) -> handle
+        _write_to_handle(handle, transformed_dict)
+
+    Le sottoclassi possono sovrascrivere:
+        _close_handles() - per cleanup custom (es. flush batch Parquet)
+    """
+
+    FILE_EXTENSION: str = ""
+
     def __init__(
         self,
         base_input_path: str,
         base_output_path: str,
-        compression: str | None = "gzip",
+        compression: str | None = None,
         adapter: Callable = None,
         expand_metadata: bool = False,
         max_file_size: int = -1,
     ):
-        super().__init__(
-            output_folder=DataFolder(str(base_output_path)),
-            output_filename="mapped__${original_filename}.jsonl.gz",
-            compression="gzip",
-            adapter=adapter,
-            expand_metadata=expand_metadata,
-            max_file_size=max_file_size,
-        )
         self.base_input_path = Path(base_input_path)
         self.base_output_path = Path(base_output_path)
         self._file_handles = {}
@@ -48,24 +57,14 @@ class CustomJsonlWriter(JsonlWriter):
         # Rimozione chiavi ridondanti o spurie
         for key in ["file_path", "data", "metadata"]:
             output.pop(key, None)
-        
+
         return output
 
-    def _open_file_handler(self, file_path: Path) -> IO:
-        return gzip.open(file_path, "wb")
-
-    def _write(self, document_dict: dict, file_handler: IO, _filename: str):
-        """Scrittura fisica su disco del JSON trasformato."""
-        with self.track_time():
-            transformed_document = self._transform_document(document_dict)
-            json_data = json.dumps(transformed_document, ensure_ascii=False) + '\n'
-            file_handler.write(json_data.encode('utf-8'))
-    
     def _prepare_document_data(self, document: Document) -> dict:
         """Inizializza i metadati per la pipeline di scrittura."""
         updated_metadata = document.metadata.copy()
         target_base = Path(self.base_output_path)
-        
+
         if target_base.name == updated_metadata.get("_dataset_name", "").split("_")[-1]:
             updated_metadata["_dataset_path"] = str(target_base.parent)
         else:
@@ -86,40 +85,53 @@ class CustomJsonlWriter(JsonlWriter):
             distribution_path = metadata.get("_subpath", "")
             base = self.base_output_path
             dataset_name = base.name
-            
-            #print(f"\n🔍 DEBUG:")
-            #print(f"  - Base output path: {base}")
-            #print(f"  - Distribution path raw: '{distribution_path}'")
-            #print(f"  - Dataset name: '{dataset_name}'")
-            
+
             # Se distribution_path è vuoto o '.', usiamo base
             if not distribution_path or distribution_path == '.':
                 output_dir = base
-                #print(f"  ➡ Caso base: {output_dir}")
             else:
                 # Mantieni l'intero percorso originale, senza filtraggi
                 output_dir = base / distribution_path
-                #print(f"  ➡ Output con path completo: {output_dir}")
-            
+
             # Crea la directory
             output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Gestione filename
             original_filename = metadata.get("_filename", "data")
             base_name = Path(original_filename).stem.split('.')[0]
-            output_filename = f"{base_name}_mapped.jsonl.gz"
-            
+            output_filename = f"{base_name}_mapped{self.FILE_EXTENSION}"
+
             print(f"✅ Output FINALE: {output_dir / output_filename}")
             print(f"   (corrisponde all'URI: file://{output_dir / output_filename})")
-            
+
             return output_dir, output_filename
-            
+
         except Exception as e:
             print(f"❌ Errore: {e}")
             import traceback
             traceback.print_exc()
-            return self.base_output_path, "fallback.jsonl.gz"
-    
+            return self.base_output_path, f"fallback{self.FILE_EXTENSION}"
+
+    @abstractmethod
+    def _open_file_handler(self, file_path: Path):
+        ...
+
+    @abstractmethod
+    def _write_to_handle(self, handle, transformed: dict):
+        ...
+
+    def _close_handles(self):
+        """Chiusura default per file handle semplici (es. gzip)."""
+        for handle in self._file_handles.values():
+            try:
+                handle.close()
+            except Exception:
+                pass
+        self._file_handles.clear()
+
+    def __call__(self, data: DocumentsPipeline, rank: int = 0, world_size: int = 1):
+        return self.run(data, rank, world_size)
+
     def run(self, data: DocumentsPipeline, rank: int = 0, world_size: int = 1) -> DocumentsPipeline:
         """Loop principale della pipeline per la gestione dei documenti e sharding."""
         try:
@@ -131,7 +143,7 @@ class CustomJsonlWriter(JsonlWriter):
                 output_dir.mkdir(parents=True, exist_ok=True)
 
                 stem = output_filename.split('.')[0]
-                final_filename = f"{stem}_{rank:05d}.jsonl.gz"
+                final_filename = f"{stem}_{rank:05d}{self.FILE_EXTENSION}"
                 file_path = output_dir / final_filename
 
                 # Allineamento cruciale: il metadato deve corrispondere al file fisico
@@ -141,10 +153,45 @@ class CustomJsonlWriter(JsonlWriter):
                 if handle_key not in self._file_handles:
                     self._file_handles[handle_key] = self._open_file_handler(file_path)
 
-                self._write(document_data, self._file_handles[handle_key], str(file_path))
+                transformed = self._transform_document(document_data)
+                self._write_to_handle(self._file_handles[handle_key], transformed)
                 yield document
         finally:
-            for handle in self._file_handles.values():
-                handle.close()
-            self._file_handles.clear()
+            self._close_handles()
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+class CustomJsonlWriter(BaseCustomWriter):
+    """
+    Writer che salva i documenti in formato JSONL compresso gzip.
+    Pattern output: {base_output_path}/{_subpath}/{base_name}_mapped_{rank:05d}.jsonl.gz
+    """
+
+    FILE_EXTENSION = ".jsonl.gz"
+
+    def __init__(
+        self,
+        base_input_path: str,
+        base_output_path: str,
+        compression: str | None = "gzip",
+        adapter: Callable = None,
+        expand_metadata: bool = False,
+        max_file_size: int = -1,
+    ):
+        super().__init__(
+            base_input_path=base_input_path,
+            base_output_path=base_output_path,
+            compression=compression,
+            adapter=adapter,
+            expand_metadata=expand_metadata,
+            max_file_size=max_file_size,
+        )
+
+    def _open_file_handler(self, file_path: Path) -> IO:
+        return gzip.open(file_path, "wb")
+
+    def _write_to_handle(self, handle: IO, transformed: dict):
+        json_data = json.dumps(transformed, ensure_ascii=False) + '\n'
+        handle.write(json_data.encode('utf-8'))

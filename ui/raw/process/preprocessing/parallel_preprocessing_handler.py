@@ -41,6 +41,7 @@ def _launch_preprocessing_worker(
     source_dataset_id: str,
     source_distribution_id: str,
     default_metadata: dict,
+    output_format: str = "jsonl.gz",
 ):
     """
     Lancia worker in background con parametri semplificati.
@@ -66,6 +67,7 @@ def _launch_preprocessing_worker(
         "source_dataset_id": source_dataset_id,
         "source_distribution_id": source_distribution_id,
         "default_metadata": default_metadata,
+        "output_format": output_format,
     }
 
     try:
@@ -160,6 +162,13 @@ def show_parallel_preprocessing(st_app):
     st_app.markdown("---")
     st_app.subheader("🎯 Esecuzione Preprocessing")
 
+    output_format = st_app.selectbox(
+        "Formato di output",
+        ["jsonl.gz", "parquet"],
+        index=0,
+        help="Seleziona il formato per i file processati."
+    )
+
     col1, col2 = st_app.columns(2)
 
     with col1:
@@ -172,6 +181,7 @@ def show_parallel_preprocessing(st_app):
                 source_dataset_id=str(source_dataset.id),
                 source_distribution_id=str(distribution.id),
                 default_metadata=default_metadata,
+                output_format=output_format,
             ):
                 st_app.success("🚀 Processo di preprocessing avviato!")
                 st_app.info(

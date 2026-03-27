@@ -8,7 +8,7 @@ from pathlib import Path
 from datatrove.executor import LocalPipelineExecutor 
 from datatrove_pipelines.mapped_pipeline.reader.unified_reader import UnifiedReader
 from datatrove_pipelines.mapped_pipeline.extractor.map import MapperExtractor
-from datatrove_pipelines.mapped_pipeline.writer.writer import CustomJsonlWriter
+from datatrove_pipelines.mapped_pipeline.writer.unified_writer import UnifiedWriter
 from datatrove_pipelines.mapped_pipeline.stats.low_level_stats import DocStats
 from datatrove_pipelines.mapped_pipeline.stats.chat_template_stats import ChatTemplateStats
 
@@ -29,6 +29,7 @@ def run_mapping_pipeline(args):
         src_schema = args['src_schema']
         glob_pattern = args['glob_pattern']
         perform_chat_stats = args['perform_chat_stats']
+        output_format = args.get("output_format", "jsonl.gz")
         
         # 🔴 MANCA LA VALIDAZIONE! Aggiungiamola:
         
@@ -99,7 +100,8 @@ def run_mapping_pipeline(args):
 
         # 5. Inizializzazione Writer
         print(f"🎯 Inizializzazione Writer: \n base_input: {base_input_root} \n base_output: {base_output_root}")
-        writer = CustomJsonlWriter(
+        writer = UnifiedWriter(
+            output_format=output_format,
             base_input_path=base_input_root,
             base_output_path=base_output_root,
         )

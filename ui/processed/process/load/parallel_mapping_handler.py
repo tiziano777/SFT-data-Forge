@@ -1,7 +1,6 @@
 # ui/load/parallel_mapping_handler.py
 import json
 import os
-import tokenize
 import uuid
 from datetime import date
 from utils.path_utils import to_binded_path
@@ -19,6 +18,7 @@ from data_class.repository.table.dataset_repository import DatasetRepository
 from data_class.repository.table.distribution_repository import DistributionRepository
 from data_class.repository.table.mapping_repository import MappingRepository
 from data_class.repository.table.schema_template_repository import SchemaTemplateRepository
+from datatrove_pipelines.mapped_pipeline.writer.unified_writer import UnifiedWriter
 
 
 BASE_PREFIX = os.getenv("BASE_PREFIX")
@@ -130,6 +130,13 @@ def show_parallel_mapping(st):
         perform_chat_stats = False
 
     # Bottone per avviare la pipeline ETL
+    output_format = st.selectbox(
+        "Formato di output",
+        ["jsonl.gz", "parquet"],
+        index=0,
+        help="Seleziona il formato per i file mappati."
+    )
+
     if st.button("Map dataset", key="preprocess_dataset_btn"):
         st.info("🔄 Avvio pipeline ETL in background...")
         
@@ -145,7 +152,8 @@ def show_parallel_mapping(st):
             "dst_schema": dst_schema,
             "src_schema": distribution.src_schema,
             "glob_pattern": st.session_state.current_distribution.glob,
-            "perform_chat_stats": perform_chat_stats
+            "perform_chat_stats": perform_chat_stats,
+            "output_format": output_format,
         }
 
         try:
@@ -200,8 +208,8 @@ def show_parallel_mapping(st):
                     uri=target_distribution_uri,
                     tokenized_uri=None,
                     dataset_id=target_dataset.id,
-                    glob="*.jsonl.gz",
-                    format="jsonl.gz",
+                    glob=UnifiedWriter.FORMAT_METADATA[output_format]["glob"],
+                    format=UnifiedWriter.FORMAT_METADATA[output_format]["format"],
                     name=f"mapped__{distribution.name}",
                     query=distribution.query,
                     split=distribution.split if distribution.split else "unknown",

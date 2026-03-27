@@ -25,7 +25,7 @@ sys.path.insert(0, project_root)
 from datatrove.io import DataFolder
 from datatrove.executor import LocalPipelineExecutor
 from datatrove_pipelines.processed_pipeline.reader.unified_reader import UnifiedReader
-from datatrove_pipelines.processed_pipeline.writer.writer import CustomJsonlWriter
+from datatrove_pipelines.processed_pipeline.writer.unified_writer import UnifiedWriter
 from data_class.repository.table.dataset_repository import DatasetRepository
 from data_class.repository.table.distribution_repository import DistributionRepository
 from data_class.entity.table.dataset import Dataset
@@ -144,6 +144,7 @@ def run_datatrove_pipeline(
     path_extractor: PathExtractor,
     glob_pattern: str,
     default_metadata: dict,
+    output_format: str = "jsonl.gz",
 ):
     """
     Esegue la pipeline datatrove.
@@ -195,10 +196,10 @@ def run_datatrove_pipeline(
             compression=None,
         )
         print(target_dataset_path, distribution_name)
-        writer = CustomJsonlWriter(
+        writer = UnifiedWriter(
+            output_format=output_format,
             target_path=target_dataset_path,
             distribution_relative=distribution_name,
-            compression="gzip",
         )
 
         n_cores = multiprocessing.cpu_count()
@@ -289,6 +290,7 @@ def create_language_distributions(
     source_distribution_id: str,
     path_extractor: PathExtractor,
     db_manager,
+    output_format: str = "jsonl.gz",
 ):
     """Crea le distribuzioni per lingua nel DB."""
     log("🌐 Creazione distribuzioni per lingua...")
@@ -307,13 +309,17 @@ def create_language_distributions(
             # URI binded per questa lingua
             lang_uri = path_extractor.get_target_dist_uri(lang)
             
+            format_meta = UnifiedWriter.FORMAT_METADATA.get(output_format, {
+                "glob": "*.jsonl.gz", "format": "jsonl.gz"
+            })
+
             lang_dist = Distribution(
                 id=str(uuid.uuid4()),
                 uri=lang_uri,
                 tokenized_uri=None,
                 dataset_id=processed_dataset.id,
-                glob="*.jsonl.gz",
-                format="jsonl.gz",
+                glob=format_meta["glob"],
+                format=format_meta["format"],
                 name=f"{source_dist.name}__{lang}",
                 query=source_dist.query,
                 split=source_dist.split,
@@ -348,7 +354,7 @@ def create_language_distributions(
         return created
 
 
-def verify_output(path_extractor: PathExtractor):
+def verify_output(path_extractor: PathExtractor, output_format: str = "jsonl.gz"):
     """Verifica che l'output sia stato generato correttamente."""
     log("🔍 Verifica output...")
     try:
@@ -358,17 +364,18 @@ def verify_output(path_extractor: PathExtractor):
             log(f"❌ Directory output non trovata: {check_root}")
             return False
 
-        gzip_files = list(check_root.rglob("*.jsonl.gz"))
-        if not gzip_files:
-            log("❌ Nessun file .jsonl.gz generato")
+        ext_pattern = "*.parquet" if output_format == "parquet" else "*.jsonl.gz"
+        output_files = list(check_root.rglob(ext_pattern))
+        if not output_files:
+            log(f"❌ Nessun file {ext_pattern} generato")
             return False
 
-        total_size = sum(f.stat().st_size for f in gzip_files)
-        log(f"✅ {len(gzip_files)} file — {total_size / (1024 * 1024):.2f} MB")
+        total_size = sum(f.stat().st_size for f in output_files)
+        log(f"✅ {len(output_files)} file — {total_size / (1024 * 1024):.2f} MB")
 
         # Statistiche per lingua
         lang_stats: dict[str, dict] = {}
-        for f in gzip_files:
+        for f in output_files:
             lang = f.parent.name
             lang_stats.setdefault(lang, {"files": 0, "size": 0})
             lang_stats[lang]["files"] += 1
@@ -404,6 +411,7 @@ def main():
         source_dataset_id = params["source_dataset_id"]
         source_distribution_id = params["source_distribution_id"]
         default_metadata = params["default_metadata"]
+        output_format = params.get("output_format", "jsonl.gz")
 
         log(f"📂 Source dataset URI     : {source_dataset_uri}")
         log(f"📂 Source distribution URI: {source_distribution_uri}")
@@ -424,7 +432,7 @@ def main():
         log("FASE 1: PROCESSING DATATROVE")
         log("=" * 40)
 
-        if not run_datatrove_pipeline(path_extractor, glob_pattern, default_metadata):
+        if not run_datatrove_pipeline(path_extractor, glob_pattern, default_metadata, output_format):
             log("❌ Pipeline fallita")
             sys.exit(1)
 
@@ -441,7 +449,7 @@ def main():
             sys.exit(1)
 
         created_distributions = create_language_distributions(
-            processed_dataset, source_distribution_id, path_extractor, db_manager
+            processed_dataset, source_distribution_id, path_extractor, db_manager, output_format
         )
         if not created_distributions:
             log("⚠️ Nessuna distribuzione creata")
@@ -451,7 +459,7 @@ def main():
         log("FASE 3: VERIFICA OUTPUT")
         log("=" * 40)
 
-        ok = verify_output(path_extractor)
+        ok = verify_output(path_extractor, output_format)
 
         log("\n" + "=" * 80)
         if ok:

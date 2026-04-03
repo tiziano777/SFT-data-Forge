@@ -2,6 +2,7 @@ import os
 import re
 from typing import Optional, Tuple
 import streamlit as st
+import time
 
 from data_class.entity.table.dataset_card import DatasetCard
 from ui.dataset_card.dataset_download.download_model import DownloadConfig
@@ -241,18 +242,18 @@ def _render_manual_path_input(st, dataset_card: DatasetCard) -> Tuple[Optional[s
     """Renderizza l'input manuale del percorso"""
     st.info("💡 Inserisci il percorso relativo rispetto alla directory base")
     st.write(f"**Directory base:** `{BASE_PATH}`")
-    
+
     relative_path = st.text_input(
         "Percorso relativo:",
         value=dataset_card.dataset_name.lower().replace(' ', '_'),
         key="manual_path_input"
     )
-    
+
     if not relative_path:
         return None, "non_selezionato"
-    
+
     full_path = os.path.join(BASE_PATH, relative_path)
-    
+
     if os.path.exists(full_path):
         st.success(f"✅ **Percorso esistente:** `{full_path}`")
         return full_path, "confermato"
@@ -261,49 +262,16 @@ def _render_manual_path_input(st, dataset_card: DatasetCard) -> Tuple[Optional[s
         return full_path, "selezionato"
 
 
-'''
-def _execute_download(st, downloader: DatasetDownloader, dataset_card,
-                     download_path: str, config):
-    """Helper UI per gestire il feedback del download background"""
-    with st.spinner("📥 Inizializzazione processo..."):
-        result = downloader.execute_download(dataset_card, download_path, config)
-    
-    if result.success:
-        st.success(f"✅ {result.message}")
-        # Puliamo eventuali vecchi comandi CLI per evitare confusione
-        st.session_state.generated_cli_command = None 
-    else:
-        st.error(f"❌ {result.message}")
-'''
-
 
 def _render_download_action(st, downloader: DatasetDownloader, dataset_card,
-                          selected_path: str, path_status: str, 
+                          selected_path: str, path_status: str,
                           download_config, source_ready: bool):
-    """Interfaccia con pulsanti sdoppiati: Background vs CLI"""
-    
+    """Interfaccia semplificata con pulsante unico: Avvia Download"""
+
     repo_id = download_config.repo_id if download_config.source == 'huggingface' else ""
     download_ready = source_ready and selected_path and "/" in repo_id
 
-    # 1. MOSTRA COMANDO CLI (Se generato in precedenza)
-    if st.session_state.get("generated_cli_command"):
-        st.info("📋 **Copia questo comando per l'Host esterno:**")
-        st.code(st.session_state.generated_cli_command, language="bash")
-        if st.button("🗑️ Chiudi comando", key="btn_clear_cli"):
-            st.session_state.generated_cli_command = None
-            st.rerun()
-
-        # Inserisco diceria e bottone acquisizione metadati
-        st.markdown("---")
-        st.write("Una volta concluso il download, premi qui per acquisire metadati")
-        if st.button("📥 Acquisisci metadati", key="btn_acquire_metadata"):
-            # Usa le informazioni salvate in session_state per ricostruire il contesto
-            last_info = st.session_state.get("last_download_info")
-            _acquire_metadata(last_info)
-
-        st.markdown("---")
-
-    # 2. ANTEPRIMA PATH GERARCHICO
+    # Anteprima del percorso finale
     if download_ready:
         repo_parts = [p for p in repo_id.split('/') if p]
         final_path_preview = os.path.join(selected_path, *repo_parts)
@@ -312,27 +280,79 @@ def _render_download_action(st, downloader: DatasetDownloader, dataset_card,
         st.warning("⚠️ Completa la selezione (Path e Sorgente) per procedere.")
 
     st.markdown("---")
-    col1, col2 = st.columns(2)
 
-    with col1:
-        # PULSANTE 2: SOLO GENERAZIONE TESTO
-        if st.button("💻 GENERA COMANDO CLI", disabled=not download_ready, use_container_width=True):
-            # Chiama la funzione specifica per il comando
-            cmd = downloader.get_cli_command(repo_id, selected_path)
-            st.session_state.generated_cli_command = cmd
-            
-            # CALCOLO IL PATH FINALE (inclusi i segmenti del repo_id) prima di salvarlo
+    # Pulsante unico per avviare il download
+    if st.button("▶️ Avvia Download", disabled=not download_ready, use_container_width=True, type="primary"):
+        with st.spinner("📥 Inizializzazione download..."):
+            result = downloader.run_background_download(
+                repo_id,
+                selected_path,
+                dataset_card,
+                download_config
+            )
+
+        if result.success:
+            st.success(f"✅ {result.message}")
+
+            # Calcola il path finale e salva le informazioni
             repo_parts = [p for p in repo_id.split('/') if p]
             final_storage_path = os.path.join(selected_path, *repo_parts)
-            
-            # Salvo le informazioni necessarie per l'acquisizione metadati lato UI
             st.session_state.last_download_info = {
                 "repo_id": repo_id,
-                "selected_path": final_storage_path, # Salviamo il path atomico finale
+                "selected_path": final_storage_path,
                 "download_config": download_config.__dict__ if hasattr(download_config, "__dict__") else None,
-                "derived_card": getattr(dataset_card, "id", None)
+                "derived_card": getattr(dataset_card, "id", None),
+                "download_start_time": datetime.now()
             }
+            st.session_state.download_in_progress = True
             st.rerun()
+        else:
+            st.error(f"❌ {result.message}")
+            st.session_state.last_download_info = None
+            st.session_state.download_in_progress = False
+
+    # Monitoraggio download in progress
+    if st.session_state.get("download_in_progress") and st.session_state.get("last_download_info"):
+        _render_download_monitor(st, downloader, dataset_card)
+
+
+def _render_download_monitor(st, downloader: DatasetDownloader, dataset_card):
+    """Monitora il download e acquisisce i metadati al completamento"""
+    info = st.session_state.last_download_info
+    repo_parts = [p for p in info["repo_id"].split('/') if p]
+    final_storage_path = info["selected_path"]
+    pid_file = os.path.join(final_storage_path, "download.pid")
+
+    st.markdown("---")
+    if os.path.exists(pid_file):
+        # Download ancora in corso
+        st.info("⏳ **Download in progress...** Il file sarà monitorato automaticamente.")
+
+        # Pulsante per controllo manuale
+        if st.button("🔄 Controlla stato", use_container_width=True):
+            st.rerun()
+
+        # Auto-rerun ogni 10 secondi (Streamlit's built-in rerun mechanism)
+        import streamlit.components.v1 as components
+        components.html("""
+        <script>
+        setTimeout(() => {
+            location.reload();
+        }, 10000);
+        </script>
+        """, height=0)
+    else:
+        # Download completato
+        st.success("✅ **Download completato!** Acquisizione metadati in corso...")
+
+        with st.spinner("📊 Acquisizione metadati..."):
+            _acquire_metadata(info)
+
+        # Pulisci lo stato
+        st.session_state.last_download_info = None
+        st.session_state.download_in_progress = False
+        st.rerun()
+
 
 # Nuova funzione helper per acquisire metadati dal path/ repo_id e inserire il Dataset
 def _acquire_metadata(info: dict):

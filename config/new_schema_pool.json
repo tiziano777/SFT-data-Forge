@@ -1,0 +1,449 @@
+[
+  {
+    "id": "3df02834-896d-466c-a082-0274e9254b99",
+    "serial": 1,
+    "name": "pretraining_schema_template",
+    "description": "Schema standard per dataset di pretraining, include campi per percorso dataset, sottopercorso, nome file, lingua, formato, distribuzione e hash identificativo.",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["id", "text", "_dataset_name", "_id_hash", "_dataset_path", "_subpath", "_filename", "_lang"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "_filename": { "type": "string", "minLength": 1 },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0",
+    "issued": "2026-03-24T17:42:47.624644+01:00",
+    "modified": "2026-03-24T17:42:47.624644+01:00"
+  },
+  {
+    "id": "3df02834-896d-466c-a082-0274e9254b95",
+    "serial": 2,
+    "name": "SFT_Chat_Template",
+    "description": "Schema standard per conversazioni multi-turno con SYSTEM, supporta messaggi, ruoli (USER/ASSISTANT/SYSTEM), contesto (context), ragionamento interno (think) e chiamate a funzioni (functioncall).",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "system": { "type": ["string", "null"] },
+        "context": { "type": ["string", "null"] },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["content", "role", "think", "functioncall", "context"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+              "context": { "type": ["string", "null"] },
+              "functioncall": {
+                "anyOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["payload", "response"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "payload": { "type": "string", "minLength": 1 },
+                      "response": { "type": "string", "minLength": 1 }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0.2",
+    "issued": "2026-03-24T17:42:47.624644+01:00",
+    "modified": "2026-04-02T12:55:30.908600+02:00"
+  },
+  {
+    "id": "3440992c-25fc-4835-87a4-80b08cacb310",
+    "serial": 4,
+    "name": "SFT_Chat_Template_V2",
+    "description": "Schema standard per conversazioni multi-turno senza SYSTEM, supporta messaggi, ruoli (USER/ASSISTANT/SYSTEM), contesto (context), ragionamento interno (think) e chiamate a funzioni (functioncall).",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "context": { "type": ["string", "null"] },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["content", "role", "think", "functioncall", "context"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+              "context": { "type": ["string", "null"] },
+              "functioncall": {
+                "anyOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["payload", "response"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "payload": { "type": "string", "minLength": 1 },
+                      "response": { "type": "string", "minLength": 1 }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0.1",
+    "issued": "2026-04-02T12:57:30.226174+02:00",
+    "modified": "2026-04-02T12:58:12.030750+02:00"
+  },
+  {
+    "id": "5f9941bd-3951-47af-9bbc-fbe1850f4a5b",
+    "serial": 6,
+    "name": "Instruct_SFT",
+    "description": "Schema for Instruct SFT fork",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "content"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0.1",
+    "issued": "2026-04-02T14:50:09.489814+02:00",
+    "modified": "2026-04-02T15:22:49.352404+02:00"
+  },
+  {
+    "id": "399cab7d-69d9-4932-9a5c-744d12eb4ee7",
+    "serial": 5,
+    "name": "Think-SFT",
+    "description": "Schema per SFT think-based",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "content", "think"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "think": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }] }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0.2",
+    "issued": "2026-04-02T14:48:45.113199+02:00",
+    "modified": "2026-04-02T14:53:29.430469+02:00"
+  },
+  {
+    "id": "a6a0d78a-f20d-47fc-b173-269fbf8e9308",
+    "serial": 7,
+    "name": "Think_DPO_SFT",
+    "description": "La struttura DPO richiede che ogni sample abbia un prompt (la conversazione fino all'ultimo turno utente) e una coppia di risposte. Il campo messages diventa il prompt, mentre le risposte gold/wrong sono oggetti separati con content + think. Il prompt è tutto ciò che precede la risposta da confrontare. In un setting multi-turn, il prompt può essere una conversazione intera fino all'ultimo turno USER. Le due risposte (gold/wrong) sono solo l'ultimo turno ASSISTANT da confrontare.",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "responses", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "content", "think"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }] }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "responses": {
+          "type": "object",
+          "required": ["gold", "wrong"],
+          "properties": {
+            "gold": {
+              "type": "object",
+              "required": ["content", "think"],
+              "additionalProperties": false,
+              "properties": {
+                "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+                "content": { "type": "string", "minLength": 1 }
+              }
+            },
+            "wrong": {
+              "type": "object",
+              "required": ["content", "think"],
+              "additionalProperties": false,
+              "properties": {
+                "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+                "content": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0.1",
+    "issued": "2026-04-02T15:01:11.776236+02:00",
+    "modified": "2026-04-02T15:02:37.404970+02:00"
+  },
+  {
+    "id": "02227c7a-201c-44bf-ac8d-6a78931fe619",
+    "serial": 9,
+    "name": "Instruct_DPO_K-SFT",
+    "description": "Instruct DPO with K-shot delta learning by negative samples",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "responses", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "content", "think"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "responses": {
+          "type": "object",
+          "required": ["gold", "negatives"],
+          "properties": {
+            "gold": {
+              "type": "object",
+              "required": ["content", "think"],
+              "additionalProperties": false,
+              "properties": {
+                "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+                "content": { "type": "string", "minLength": 1 }
+              }
+            },
+            "negatives": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["content", "think"],
+                "additionalProperties": false,
+                "properties": {
+                  "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+                  "content": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0.1",
+    "issued": "2026-04-02T15:20:46.225259+02:00",
+    "modified": "2026-04-02T15:23:40.752197+02:00"
+  },
+  {
+    "id": "5f3e5ccf-37e4-4977-be36-7897200fed70",
+    "serial": 8,
+    "name": "Instruct_DPO_SFT",
+    "description": "Schema for DPO instruct-based fork",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "responses", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "content"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }] }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "responses": {
+          "type": "object",
+          "required": ["gold", "wrong"],
+          "properties": {
+            "gold": {
+              "type": "object",
+              "required": ["content"],
+              "additionalProperties": false,
+              "properties": { "content": { "type": "string", "minLength": 1 } }
+            },
+            "wrong": {
+              "type": "object",
+              "required": ["content"],
+              "additionalProperties": false,
+              "properties": { "content": { "type": "string", "minLength": 1 } }
+            }
+          },
+          "additionalProperties": false
+        },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0.2",
+    "issued": "2026-04-02T15:04:16.871276+02:00",
+    "modified": "2026-04-02T15:22:26.050511+02:00"
+  },
+  {
+    "id": "8a3bb138-ed8b-4935-9b13-5266c45b28b2",
+    "serial": 10,
+    "name": "Think_DPO_K-SFT",
+    "description": "Think DPO fork with K-negative samples",
+    "schema": {
+      "type": "object",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["messages", "responses", "_lang", "_dataset_path", "_subpath", "_filename", "_dataset_name", "_id_hash"],
+      "properties": {
+        "_lang": { "type": "string", "default": "un", "maxLength": 2 },
+        "_id_hash": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "_subpath": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "content", "think"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "enum": ["USER", "ASSISTANT", "SYSTEM"] },
+              "think": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+              "content": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] }
+            }
+          }
+        },
+        "_filename": { "type": "string", "minLength": 1 },
+        "responses": {
+          "type": "object",
+          "required": ["gold", "negatives"],
+          "properties": {
+            "gold": {
+              "type": "object",
+              "required": ["content"],
+              "additionalProperties": false,
+              "properties": { "content": { "type": "string", "minLength": 1 } }
+            },
+            "negatives": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["content"],
+                "additionalProperties": false,
+                "properties": { "content": { "type": "string", "minLength": 1 } }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "_dataset_name": { "type": "string", "minLength": 1 },
+        "_dataset_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "version": "1.0",
+    "issued": "2026-04-02T15:25:52.520309+02:00",
+    "modified": "2026-04-02T15:25:52.520312+02:00"
+  }
+]

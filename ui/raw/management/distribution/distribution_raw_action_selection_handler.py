@@ -219,7 +219,7 @@ def _render_main_action_buttons(st_app, distribution: Distribution):
     """Renderizza i bottoni principali per le azioni sulla distribution."""
     
     # Logica di priorità: se lang è None, blocca tutto tranne il tasto metadati
-    is_metadata_missing = distribution.lang is None or distribution.lang == "multi" or distribution.lang == "un" or distribution.split == None
+    is_metadata_missing = distribution.lang is None or distribution.lang == "un" or distribution.split == None
     
     if is_metadata_missing:
         st_app.warning("⚠️ Lingua o Tipo di distribution non censita, alcune funzionalità potrebbero essere disabilitate.")
@@ -257,7 +257,7 @@ def _render_extra_action_buttons(st_app, distribution: Distribution):
     """Renderizza i bottoni aggiuntivi per le azioni speciali."""
     
     # Logica di priorità metadati
-    is_metadata_missing = distribution.lang is None or distribution.lang == "multi" or distribution.lang == "un" or distribution.split == None
+    is_metadata_missing = distribution.lang is None  or distribution.lang == "un" or distribution.split == None
     
     col_extra1, col_extra2, col_extra3 = st_app.columns(3)
 

@@ -3,10 +3,7 @@ from typing import List, Optional, Dict
 from datetime import datetime, timezone
 import json
 
-from traitlets import default
-
 from config.state_vars import home_vars
-from data_class.entity.table import dataset
 from utils.streamlit_func import reset_dashboard_session_state
 
 from data_class.repository.table.dataset_repository import DatasetRepository
@@ -457,6 +454,7 @@ def create_dataset_card_with_composition(st, repo: DatasetCardRepository, comp_r
     try:
         dataset_card = DatasetCard(
             id=None,
+            dataset_id= form_data['dataset_id'],
             dataset_name=form_data['dataset_name'],
             modality=form_data['modality'],
             dataset_description=form_data['dataset_description'],
@@ -953,6 +951,7 @@ def show_dataset_card_creation_form(st, dataset_card_repo: DatasetCardRepository
 
             try:
                 card_entity.dataset_name = clean_name
+                card_entity.dataset_id = dataset_id
                 card_entity.modality = selected_modality
                 card_entity.dataset_description = dataset_description
                 card_entity.languages = selected_languages

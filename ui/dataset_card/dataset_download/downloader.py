@@ -1,7 +1,6 @@
 import os
 import subprocess
 import sys
-import shutil
 from datetime import datetime
 
 # Import relativo corretto per il tuo progetto
@@ -36,71 +35,9 @@ class DatasetDownloader:
             return self.db_manager.register_dataset(dataset_card, local_path, repo_id, remote_url)
         return None
 
-    def _get_hf_cli_path(self) -> str:
-        """
-        Individua il percorso assoluto di huggingface-cli nel container.
-        Risolve l'errore 'No such file' causato da PATH incompleti in nohup.
-        """
-        path = shutil.which("huggingface-cli")
-        if path:
-            return path
-        
-        # Fallback standard per ambienti Linux/Docker
-        fallbacks = [
-            "/usr/local/bin/huggingface-cli",
-            "/usr/bin/huggingface-cli",
-            os.path.expanduser("~/.local/bin/huggingface-cli")
-        ]
-        for f in fallbacks:
-            if os.path.exists(f):
-                return f
-        return "huggingface-cli"
 
-    def _to_host_path(self, container_path: str) -> str:
-        """
-        Mappa il percorso visto dal container al percorso visto dall'host.
-        Rimuove il prefisso /app tipico dei mount Docker.
-        """
-        if container_path.startswith("/app/"):
-            return container_path.replace("/app", "", 1)
-        return container_path
 
-    def _get_log_identity(self, repo_id: str) -> str:
-        """Genera lo slug del file log: author__dataset_timestamp.log"""
-        date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dataset_slug = repo_id.replace('/', '__')
-        return f"{dataset_slug}_{date_str}.log"
-
-    # --- OPTION 1: CLI COMMAND GENERATION ---
-    
-    def get_cli_command(self, repo_id: str, save_dir: str) -> str:
-        """Genera il comando shell per il download in background tramite host."""
-        # 1. Risoluzione dei path (Container vs Host)
-        abs_save_dir_container = self._build_hierarchical_path(save_dir, repo_id)
-        host_save_dir = self._to_host_path(abs_save_dir_container)
-
-        # 2. Localizzazione binario e token
-        hf_cli = self._get_hf_cli_path()
-        hf_token = os.getenv("HF_ACCESS_TOKEN", "")
-        token_auth = f"--token {hf_token}" if hf_token else ""
-
-        # 3. Configurazione Log
-        log_filename = self._get_log_identity(repo_id)
-        host_log_dir = os.path.join(host_save_dir, "logs")
-        host_log_file = os.path.join(host_log_dir, log_filename)
-        
-        exclude_pattern = '--exclude ".git*" ".gitignore" "README.md" ".cache*"'
-        
-        # Comando finale concatenato
-        return (
-            f"mkdir -p \"{host_log_dir}\" && "
-            f"nohup {hf_cli} download {repo_id} {token_auth} "
-            f"--repo-type dataset --resume-download {exclude_pattern} "
-            f"--local-dir \"{host_save_dir}\" "
-            f"> \"{host_log_file}\" 2>&1 &"
-        )
-
-    # --- OPTION 2: BACKGROUND WORKER ---
+    # --- BACKGROUND WORKER METHOD ---
 
     def run_background_download(self, repo_id: str, save_dir: str, dataset_card, config) -> DownloadResult:
         """Esegue il download gestito internamente dal container tramite worker Python."""
@@ -116,7 +53,7 @@ class DatasetDownloader:
             
             # Percorso dello script worker relativo al pacchetto attuale
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            worker_script = os.path.join(current_dir, "raw_datatrove_pipe", "hf_download_worker.py")
+            worker_script = os.path.join(current_dir, "raw_datatrove_pipe", "hf_raw_download_worker.py")
             
             # Lancio del processo worker
             subprocess.Popen(

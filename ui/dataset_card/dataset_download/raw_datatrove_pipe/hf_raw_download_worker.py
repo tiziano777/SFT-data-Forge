@@ -17,7 +17,7 @@ def download_file_with_retry(repo_id, filename, local_dir, token, retries=10):
                 filename=filename,
                 local_dir=local_dir,
                 repo_type="dataset",
-                token=token,
+                token=token if token else None,
                 local_dir_use_symlinks=False,
                 resume_download=True
             )
@@ -42,7 +42,7 @@ def run_standalone_download(repo_id, output_base, token, max_workers, log_file):
 
     try:
         print(f"🚀 Avvio scansione repository: {repo_id}")
-        all_files = list_repo_files(repo_id, repo_type="dataset", token=token)
+        all_files = list_repo_files(repo_id, repo_type="dataset", token=token if token else None)
         
         # 3. Applicazione Filtri Exclude (Logica fnmatch per supportare i glob)
         data_files = []

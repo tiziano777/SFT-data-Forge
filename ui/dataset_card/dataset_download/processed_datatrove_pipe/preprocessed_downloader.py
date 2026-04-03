@@ -9,7 +9,7 @@ from data_class.entity.table.dataset import Dataset
 from data_class.repository.table.dataset_repository import DatasetRepository
 
 BASE_PREFIX = os.getenv("BASE_PREFIX")
-
+HF_ACCESS_TOKEN = os.getenv("HF_ACCESS_TOKEN")
 logger = logging.getLogger(__name__)
 
 class DatasetDownloader:

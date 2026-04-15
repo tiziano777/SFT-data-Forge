@@ -14,3 +14,15 @@ class Recipe:
     tasks: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     derived_from : Optional[str] = None
+
+    def to_downloadable_dict(self, entries: dict) -> dict:
+        """
+        Converts the Recipe instance into a downloadable dictionary format.
+        Adds metadata (recipe_id, name, description) and nests entries under 'entries'.
+        """
+        return {
+            "recipe_id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "entries": entries
+        }

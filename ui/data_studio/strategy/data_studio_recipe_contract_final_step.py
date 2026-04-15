@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import yaml
 from uuid import UUID
+import uuid
 from datetime import datetime
 from utils.path_utils import to_internal_path
 BASE_PREFIX = os.getenv("BASE_PREFIX")
@@ -18,35 +19,43 @@ db_manager = get_db_manager()
 dist_repo = DistributionRepository(db_manager)
 
 ## # DOWNLOAD PREPARATION
-def _prepare_recipe_for_download(recipe_dict):
+def _prepare_recipe_entries_for_download(recipe_dict):
     """
     Trasforma la ricetta: usa dist_uri come chiave e converte UUID in stringhe.
+    Aggiorna per riflettere il nuovo livello di nesting delle entries.
     """
     transformed_recipe = {}
-    
+
     for old_key, details in recipe_dict.items():
         # Copia profonda dei dettagli per non modificare l'originale in session_state
         new_details = details.copy()
-        
+
         # 1. Gestione UUID: convertiamo l'id originale (chiave o campo) in stringa
         # Se dist_id è un oggetto UUID, lo rendiamo stringa leggibile
         if "dist_id" in new_details and isinstance(new_details["dist_id"], UUID):
             new_details["dist_id"] = str(new_details["dist_id"])
-        
+
         # Gestiamo anche la vecchia chiave se era un UUID
         current_id_str = str(old_key)
-        new_details["dist_id"] = current_id_str # Inseriamo l'ID originale come campo interno
-        
+        new_details["dist_id"] = current_id_str  # Inseriamo l'ID originale come campo interno
+
         # 2. Identifichiamo la nuova chiave (dist_uri)
         new_key = new_details.get("dist_uri", current_id_str)
-        
+
         # 3. Pulizia di eventuali altri campi UUID annidati (opzionale ma sicuro)
         for k, v in new_details.items():
             if isinstance(v, UUID):
                 new_details[k] = str(v)
-                
+
+        # 4. Aggiorniamo per riflettere il nuovo livello di nesting
+        if "entries" in new_details:
+            nested_entries = new_details["entries"]
+            for nested_key, nested_value in nested_entries.items():
+                if isinstance(nested_value, UUID):
+                    nested_entries[nested_key] = str(nested_value)
+
         transformed_recipe[new_key] = new_details
-        
+
     return transformed_recipe
 
 ### QUERY AND MATERIALIZATION WITH DUCKDB
@@ -365,34 +374,47 @@ def data_studio_recipe_contract_final_step(st):
     # --- LOGICA DI ESPORTAZIONE (Solo se la ricetta è pronta) ---
     if st.session_state.recipe_ready:
         final_recipe = st.session_state.final_recipe_obj
-        
+
         st.divider()
         st.write("### Export & Download")
-        download_recipe = _prepare_recipe_for_download(final_recipe)
-        for entry in download_recipe.values():
+
+        # Trasformiamo la ricetta per il download
+        transformed_recipe = _prepare_recipe_entries_for_download(final_recipe)
+
+        # Use the new `to_downloadable_dict` method to format the recipe
+        recipe_entity = st.session_state.recipe_entity
+        if not recipe_entity.id:
+            recipe_entity.id = str(uuid.uuid4())  # Generate a new UUID if recipe_id is null
+
+        download_recipe = recipe_entity.to_downloadable_dict(transformed_recipe)
+
+        # Rimuoviamo la chiave `schema_template` da ogni entry prima del download
+        for entry in download_recipe["entries"].values():
             entry.pop("schema_template", None)
-            entry.pop("validation_error", None)
-        st.dataframe(download_recipe.values())
+
+        st.dataframe(download_recipe["entries"].values())
 
         save_format = st.selectbox("Select format to save the recipe", ["JSON", "CSV", "YAML"])
-        
+
         if st.button(f"Confirm & Save to DB"):
             result, msg = _store_recipe_in_db(st, final_recipe)
-            
+
             if result:
                 st.success(f"Recipe stored in Database!")
-                
+
                 if save_format == "JSON":
                     data = json.dumps(download_recipe, indent=4)
-                    file_name = f"{st.session_state.recipe_entity.name}_recipe.json"
+                    file_name = f"{recipe_entity.name}_recipe.json"
                     mime = "application/json"
                 elif save_format == "CSV":
-                    data = pd.DataFrame(download_recipe.values()).to_csv(index=False)
-                    file_name = f"{st.session_state.recipe_entity.name}_recipe.csv"
+                    # Flatten entries for CSV export
+                    flattened_entries = pd.json_normalize(download_recipe["entries"].values())
+                    data = flattened_entries.to_csv(index=False)
+                    file_name = f"{recipe_entity.name}_recipe.csv"
                     mime = "text/csv"
                 elif save_format == "YAML":
-                    data = yaml.dump(download_recipe)
-                    file_name = f"{st.session_state.recipe_entity.name}_recipe.yaml"
+                    data = yaml.dump(download_recipe, sort_keys=False)
+                    file_name = f"{recipe_entity.name}_recipe.yaml"
                     mime = "text/yaml"
 
                 st.download_button(

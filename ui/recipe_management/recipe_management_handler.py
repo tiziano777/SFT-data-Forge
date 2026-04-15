@@ -487,7 +487,7 @@ def recipe_management_handler(st):
                         margin=dict(t=5, b=5, l=5, r=5), height=130,
                         showlegend=False, paper_bgcolor="rgba(0,0,0,0)"
                     )
-                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}, key=f"plotly_chart_{recipe.id}")
 
             st.markdown("---")
 

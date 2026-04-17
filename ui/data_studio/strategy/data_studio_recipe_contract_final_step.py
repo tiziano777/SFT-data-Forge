@@ -19,44 +19,70 @@ db_manager = get_db_manager()
 dist_repo = DistributionRepository(db_manager)
 
 ## # DOWNLOAD PREPARATION
-def _prepare_recipe_entries_for_download(recipe_dict):
+def _prepare_recipe_entries_for_download(recipe_dict, recipe_entity=None):
     """
-    Trasforma la ricetta: usa dist_uri come chiave e converte UUID in stringhe.
-    Aggiorna per riflettere il nuovo livello di nesting delle entries.
+    Costruisce la rappresentazione della recipe pronta per il download.
+    - Usa `dist_uri` come chiave delle entries.
+    - Converte tutti gli UUID in stringhe.
+    - Restituisce un dizionario con i campi top-level: `id`, `name`, `description`,
+      `scope`, `tasks`, `tags`, `derived_from` e `entries`.
+    
+    Se `recipe_entity` è fornito, prende i metadati top-level da esso.
     """
-    transformed_recipe = {}
+    transformed_entries = {}
 
     for old_key, details in recipe_dict.items():
-        # Copia profonda dei dettagli per non modificare l'originale in session_state
+        # Copia superficiale dei dettagli per non modificare l'originale in session_state
         new_details = details.copy()
 
-        # 1. Gestione UUID: convertiamo l'id originale (chiave o campo) in stringa
-        # Se dist_id è un oggetto UUID, lo rendiamo stringa leggibile
+        # Convertiamo dist_id se è UUID
         if "dist_id" in new_details and isinstance(new_details["dist_id"], UUID):
             new_details["dist_id"] = str(new_details["dist_id"])
 
-        # Gestiamo anche la vecchia chiave se era un UUID
+        # Manteniamo l'id originale (chiave) come campo interno
         current_id_str = str(old_key)
-        new_details["dist_id"] = current_id_str  # Inseriamo l'ID originale come campo interno
+        new_details["dist_id"] = current_id_str
 
-        # 2. Identifichiamo la nuova chiave (dist_uri)
+        # Identifichiamo la nuova chiave (dist_uri) da usare come key nell'export
         new_key = new_details.get("dist_uri", current_id_str)
 
-        # 3. Pulizia di eventuali altri campi UUID annidati (opzionale ma sicuro)
-        for k, v in new_details.items():
+        # Pulizia di eventuali altri campi UUID annidati
+        for k, v in list(new_details.items()):
             if isinstance(v, UUID):
                 new_details[k] = str(v)
 
-        # 4. Aggiorniamo per riflettere il nuovo livello di nesting
-        if "entries" in new_details:
+        if "entries" in new_details and isinstance(new_details["entries"], dict):
             nested_entries = new_details["entries"]
-            for nested_key, nested_value in nested_entries.items():
+            for nested_key, nested_value in list(nested_entries.items()):
                 if isinstance(nested_value, UUID):
                     nested_entries[nested_key] = str(nested_value)
 
-        transformed_recipe[new_key] = new_details
+        transformed_entries[new_key] = new_details
 
-    return transformed_recipe
+    # Costruiamo la struttura top-level della recipe per il download
+    recipe_download = {
+        "id": None,
+        "name": None,
+        "description": None,
+        "scope": None,
+        "tasks": None,
+        "tags": None,
+        "derived_from": None,
+        "entries": transformed_entries,
+    }
+
+    if recipe_entity is not None:
+        # Normalizziamo l'id se presente
+        recipe_download["id"] = str(recipe_entity.id) if getattr(recipe_entity, "id", None) else None
+        recipe_download["name"] = getattr(recipe_entity, "name", None)
+        recipe_download["description"] = getattr(recipe_entity, "description", None)
+        recipe_download["scope"] = getattr(recipe_entity, "scope", None)
+        recipe_download["tasks"] = getattr(recipe_entity, "tasks", None)
+        recipe_download["tags"] = getattr(recipe_entity, "tags", None)
+        derived = getattr(recipe_entity, "derived_from", None)
+        recipe_download["derived_from"] = str(derived) if derived else None
+
+    return recipe_download
 
 ### QUERY AND MATERIALIZATION WITH DUCKDB
 def _compact_sql_query(query: str) -> str:
@@ -378,23 +404,23 @@ def data_studio_recipe_contract_final_step(st):
         st.divider()
         st.write("### Export & Download")
 
-        # Trasformiamo la ricetta per il download
-        transformed_recipe = _prepare_recipe_entries_for_download(final_recipe)
-
-        # Use the new `to_downloadable_dict` method to format the recipe
+        # Trasformiamo la ricetta per il download (includendo campi top-level)
         recipe_entity = st.session_state.recipe_entity
         if not recipe_entity.id:
-            recipe_entity.id = str(uuid.uuid4())  # Generate a new UUID if recipe_id is null
+            recipe_entity.id = str(uuid.uuid4())  # Generate a new UUID if id is null
 
-        download_recipe = recipe_entity.to_downloadable_dict(transformed_recipe)
+        transformed_recipe = _prepare_recipe_entries_for_download(final_recipe, recipe_entity=recipe_entity)
+        # `transformed_recipe` è ora la struttura completa pronta per il download
+        download_recipe = transformed_recipe
 
         # Rimuoviamo la chiave `schema_template` da ogni entry prima del download
         for entry in download_recipe["entries"].values():
             entry.pop("schema_template", None)
+            entry.pop("tokenized_uri", None)
 
         st.dataframe(download_recipe["entries"].values())
 
-        save_format = st.selectbox("Select format to save the recipe", ["JSON", "CSV", "YAML"])
+        save_format = st.selectbox("Select format to save the recipe", ["JSON", "CSV", "YAML"], index=2)
 
         if st.button(f"Confirm & Save to DB"):
             result, msg = _store_recipe_in_db(st, final_recipe)

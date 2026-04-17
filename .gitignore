@@ -10,4 +10,4 @@ __pycache__/
 .vscode/
 docker/dev/.env.dev
 docker/prod/.env.prod
-.gitnexus
+

@@ -1,6 +1,8 @@
 # ui/query/query_distribution_handler.py
 import os
 import traceback
+import gzip
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 import jsonschema
@@ -12,6 +14,7 @@ import logging
 from utils.streamlit_func import reset_dashboard_session_state
 from utils.sample_reader import load_dataset_samples
 from utils.extract_glob import generate_dataset_globs
+from utils.serializer import process_record_for_json
 
 from data_class.repository.table.distribution_repository import DistributionRepository  # CORRETTO: repository non data_class.repository
 from data_class.repository.table.dataset_repository import DatasetRepository
@@ -22,6 +25,9 @@ logger = logging.getLogger(__name__)
 from data_class.entity.table.distribution import Distribution
 from data_class.entity.table.dataset import Dataset
 from utils.path_utils import to_internal_path, to_binded_path
+
+# Display limit per Streamlit UI
+DISPLAY_LIMIT = 500
 
 # Configurazione ambiente
 RAW_DATA_DIR = os.getenv("RAW_DATA_DIR")
@@ -258,20 +264,21 @@ def _execute_sql_query(st):
     try:
         with duckdb.connect() as conn:
             st.info("🔄 Esecuzione query in corso...")
-            
+
             query_base = st.session_state.last_query.strip()
-            limit_value = st.session_state.get("limit_results_input", 50)
-            
+            user_limit = st.session_state.get("limit_results_input", 50)
+            effective_limit = min(DISPLAY_LIMIT, user_limit)
+
             # Applica LIMIT se non presente
             query_to_execute = query_base.rstrip(' \t\n\r;')
             query_lower = query_to_execute.lower()
-            
+
             if " limit " in query_lower:
                 st.warning("⚠️ **ATTENZIONE**: LIMIT specificato nella query. Il valore della UI verrà ignorato.")
                 query_to_execute += ";"
             else:
-                query_to_execute = f"{query_base} LIMIT {limit_value};"
-                st.info(f"✨ Aggiunta clausola **LIMIT {limit_value}**")
+                query_to_execute = f"{query_base} LIMIT {effective_limit};"
+                st.info(f"✨ Aggiunta clausola **LIMIT {effective_limit}**")
             
             # Esegui query
             print("Eseguendo query SQL:", query_to_execute)
@@ -514,14 +521,11 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
                 chunk_df = chunk_df.assign(_filename=file_name)
             
             status_text.text(f"Salvataggio file {i+1}/{num_chunks} ({len(chunk_df)} record)...")
-            
-            chunk_df.to_json(
-                output_file,
-                orient='records',
-                lines=True,
-                force_ascii=False,
-                compression='gzip'
-            )
+
+            with gzip.open(output_file, 'wt', encoding='utf-8') as f_gz:
+                for idx, row in chunk_df.iterrows():
+                    row_dict_clean = process_record_for_json(row.to_dict())
+                    f_gz.write(json.dumps(row_dict_clean, ensure_ascii=False) + '\n')
             
             del chunk_df
             progress_bar.progress((i + 1) / num_chunks)

@@ -1,5 +1,7 @@
 import os
 import traceback
+import gzip
+import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import pyarrow.parquet as pq
@@ -14,6 +16,7 @@ from ui.processed.management.distribution.distribution_preprocessed_action_selec
 from utils.path_utils import to_binded_path, to_internal_path
 from utils.streamlit_func import reset_dashboard_session_state
 from utils.extract_glob import generate_dataset_globs
+from utils.serializer import process_record_for_json
 
 from data_class.repository.table.distribution_repository import DistributionRepository
 from data_class.repository.table.dataset_repository import DatasetRepository
@@ -22,6 +25,9 @@ from data_class.entity.table.dataset import Dataset
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Display limit per Streamlit UI
+DISPLAY_LIMIT = 500
 
 # Configurazione ambiente
 PROCESSED_DATA_DIR = os.getenv("PROCESSED_DATA_DIR")
@@ -343,7 +349,7 @@ def _execute_and_display_query(st_app, data_path: str, stats_path: str,
         st_app.markdown("---")
         st_app.markdown("#### 📊 Risultati Query")
         st_app.success(f"✅ {len(result_df)} righe trovate")
-        st_app.dataframe(result_df.head(100), width='stretch', height=400)
+        st_app.dataframe(result_df.head(DISPLAY_LIMIT), width='stretch', height=400)
         st_app.session_state.query_result_df = result_df
         st_app.session_state.executed_query = query
         st_app.session_state.result_folder_name = folder_name
@@ -474,8 +480,10 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
             file_name = f"query_results_{i+1:05d}.jsonl.gz"
             chunk_df = result_df.iloc[start_idx:end_idx].assign(_filename=file_name)
             status_text.text(f"Salvataggio file {i+1}/{num_chunks} ({len(chunk_df)} record)...")
-            chunk_df.to_json(destination_path / file_name, orient='records', lines=True,
-                             force_ascii=False, compression='gzip')
+            with gzip.open(destination_path / file_name, 'wt', encoding='utf-8') as f_gz:
+                for idx, row in chunk_df.iterrows():
+                    row_dict_clean = process_record_for_json(row.to_dict())
+                    f_gz.write(json.dumps(row_dict_clean, ensure_ascii=False) + '\n')
             del chunk_df
             progress_bar.progress((i + 1) / num_chunks)
 

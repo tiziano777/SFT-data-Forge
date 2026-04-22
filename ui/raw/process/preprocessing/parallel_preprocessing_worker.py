@@ -12,8 +12,6 @@ import multiprocessing
 from datetime import date
 from pathlib import Path
 
-from huggingface_hub import Text2TextGenerationTruncationStrategy
-
 BASE_PREFIX = os.getenv("BASE_PREFIX", "file://")
 RAW_DATA_PATH = os.getenv("RAW_DATA_DIR")
 PROCESSED_DATA_PATH = os.getenv("PROCESSED_DATA_DIR")
@@ -168,11 +166,31 @@ def run_datatrove_pipeline(
             raise RuntimeError(f"Input path non esistente: {source_path}")
 
         # Precondizione 2: ci sono file da processare
-        search_pattern = glob_pattern.lstrip("**/*").lstrip("*/")
-        matching_files = list(Path(source_path).rglob(search_pattern))
-        
-        log(f"🔍 Ricerca con pattern: {search_pattern}")
+        # Prova il glob fornito; se non trova nulla rileva il formato reale dal disco.
+        _KNOWN_GLOBS = ["**/*.parquet", "**/*.jsonl.gz", "**/*.jsonl", "**/*.json",
+                        "**/*.arrow", "**/*.ipc", "**/*.csv", "**/*.tsv", "**/*.warc"]
+
+        matching_files = [f for f in Path(source_path).glob(glob_pattern) if f.is_file()]
+
+        if not matching_files and not glob_pattern.startswith("**/"):
+            matching_files = [f for f in Path(source_path).glob(f"**/{glob_pattern}") if f.is_file()]
+            if matching_files:
+                glob_pattern = f"**/{glob_pattern}"
+
+        if not matching_files:
+            log(f"⚠️ Nessun file con pattern '{glob_pattern}', auto-rilevamento formato...")
+            for candidate in _KNOWN_GLOBS:
+                matching_files = [f for f in Path(source_path).glob(candidate) if f.is_file()]
+                if matching_files:
+                    glob_pattern = candidate
+                    log(f"🔍 Formato rilevato: {glob_pattern}")
+                    break
+
+        log(f"🔍 Pattern usato: {glob_pattern}")
         log(f"📂 Input valido: {len(matching_files)} file trovati in {source_path}")
+
+        if not matching_files:
+            raise RuntimeError(f"Nessun file trovato in {source_path} (nessun formato supportato rilevato)")
 
         # Crea directory target
         os.makedirs(target_dataset_path, exist_ok=True)
@@ -203,11 +221,12 @@ def run_datatrove_pipeline(
         )
 
         n_cores = multiprocessing.cpu_count()
-        log(f"💻 Utilizzando {n_cores} core")
+        n_tasks = min(n_cores * 10, len(matching_files))
+        log(f"💻 Utilizzando {n_cores} core, {n_tasks} task")
 
         executor = LocalPipelineExecutor(
             pipeline=[reader, writer],
-            tasks=n_cores * 10,
+            tasks=n_tasks,
             workers=int(n_cores * 0.85),
             logging_dir=None,
         )

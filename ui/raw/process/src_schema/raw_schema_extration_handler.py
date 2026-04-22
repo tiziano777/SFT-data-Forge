@@ -147,26 +147,67 @@ def _process_deterministic_extraction(st, repos: Dict) -> bool:
             logger.error(f"Error during schema extraction: {e}")
             return False
 
-def _render_manual_edit_interface(st):
-    """Render the manual edit interface."""
+def _render_manual_edit_interface(st, repos: Dict):
+    """Render the manual edit interface with improved UX and direct save."""
     st.markdown("---")
     st.subheader("✏️ Manual Schema Edit")
-    st.write("Edit the JSON schema and confirm to complete.")
-    
+    st.write("Edit the JSON schema and add descriptions. Click **Save Directly** to persist changes to the database.")
+
     # Retrieve the current schema (generated or previously modified)
     current_schema = st.session_state.get("edited_schema", st.session_state.get("generated_schema", {}))
     schema_str = json.dumps(current_schema, indent=2) if current_schema else "{}"
-    
+
+    # Show instructions for editing
+    with st.expander("📖 Edit Tips", expanded=False):
+        st.write("""
+        **To add descriptions to fields:**
+        ```json
+        {
+          "type": "object",
+          "properties": {
+            "field_name": {
+              "type": "string",
+              "description": "Describe what this field contains"
+            }
+          }
+        }
+        ```
+        """)
+
     edited_schema_str = st.text_area(
-        "Schema JSON:", 
-        value=schema_str, 
+        "Schema JSON:",
+        value=schema_str,
         height=400,
         key="manual_edit_textarea",
-        help="Edit the JSON schema according to your needs"
+        help="Edit the JSON schema according to your needs. Add 'description' fields to document each property."
     )
 
-    col1, col2 = st.columns(2)
-    if col1.button("✅ Confirm Changes", use_container_width=True, key="confirm_manual_edit"):
+    col1, col2, col3 = st.columns(3)
+
+    # Direct save to DB
+    if col1.button("💾 Save Directly to DB", use_container_width=True, key="save_direct_to_db", type="primary"):
+        try:
+            # JSON validation
+            validated_schema = json.loads(edited_schema_str)
+
+            # Save to DB immediately
+            if _save_schema_to_distribution(st, validated_schema, repos):
+                st.session_state.generated_schema = validated_schema
+                st.session_state.edited_schema = validated_schema
+                st.session_state.manual_edit_active = False
+                st.success("✅ Schema saved successfully to database!")
+                st.rerun()
+            else:
+                st.error("❌ Failed to save schema to database")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {e}")
+            st.error(f"❌ Error: Invalid JSON - {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            st.error(f"❌ Unexpected error: {e}")
+
+    # Confirm and review (session-only)
+    if col2.button("✅ Confirm & Review", use_container_width=True, key="confirm_manual_edit"):
         try:
             # JSON validation
             validated_schema = json.loads(edited_schema_str)
@@ -182,7 +223,8 @@ def _render_manual_edit_interface(st):
             logger.error(f"Unexpected error: {e}")
             st.error(f"❌ Unexpected error: {e}")
 
-    if col2.button("❌ Cancel Edit", use_container_width=True, key="cancel_manual_edit"):
+    # Cancel
+    if col3.button("❌ Cancel", use_container_width=True, key="cancel_manual_edit"):
         st.session_state.manual_edit_active = False
         st.rerun()
 

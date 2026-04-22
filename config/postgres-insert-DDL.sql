@@ -283,24 +283,8 @@ VALUES (
         'Dataset for training reward models'
     ),
     (
-        'rl_policy',
-        'Dataset or trajectories used for RL policy optimization'
-    ),
-    (
-        'continual_ft',
-        'Dataset for continual or incremental fine-tuning'
-    ),
-    (
-        'peft',
-        'Dataset used for parameter-efficient fine-tuning'
-    ),
-    (
         'evaluation',
         'Dataset for model evaluation'
-    ),
-    (
-        'benchmark',
-        'Standardized benchmark dataset'
     ),
     (
         'unknown',

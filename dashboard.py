@@ -419,9 +419,9 @@ def main():
         - Mappare i dati processati in un formato training-ready specifico per modelli LLM.
         """)
 
-        st.markdown("### 🔍 Data Discovery")
+        st.markdown("### 🔍 Data Lineage")
         st.markdown("""
-        Accedi alla sezione di **Data Discovery** per esplorare e gestire l'ontologia dei dati.
+        Accedi alla sezione di **Data Lineage** per esplorare e gestire l'ontologia dei dati.
         Qui puoi:
         - Scoprire nuove fonti di dati e comprenderne la struttura.
         - Gestire le relazioni tra diversi dataset e metadati.

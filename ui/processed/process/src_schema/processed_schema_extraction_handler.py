@@ -154,26 +154,67 @@ def _process_deterministic_extraction(st, repos: Dict) -> bool:
             logger.error(f"Errore estrazione schema: {e}")
             return False
 
-def _render_manual_edit_interface(st):
-    """Renderizza l'interfaccia di modifica manuale."""
+def _render_manual_edit_interface(st, repos: Dict):
+    """Renderizza l'interfaccia di modifica manuale con UX migliorata e salvataggio diretto."""
     st.markdown("---")
     st.subheader("✏️ Modifica Manuale Schema")
-    st.write("Modifica lo schema JSON e conferma per completare.")
-    
+    st.write("Modifica lo schema JSON e aggiungi descrizioni. Clicca **Salva Direttamente su DB** per persistere i cambiamenti nel database.")
+
     # Recupera lo schema corrente (generato o modificato in precedenza)
     current_schema = st.session_state.get("edited_schema", st.session_state.get("generated_schema", {}))
     schema_str = json.dumps(current_schema, indent=2) if current_schema else "{}"
-    
+
+    # Mostra istruzioni per l'editing
+    with st.expander("📖 Suggerimenti per l'Editing", expanded=False):
+        st.write("""
+        **Per aggiungere descrizioni ai campi:**
+        ```json
+        {
+          "type": "object",
+          "properties": {
+            "nome_campo": {
+              "type": "string",
+              "description": "Descrivi cosa contiene questo campo"
+            }
+          }
+        }
+        ```
+        """)
+
     edited_schema_str = st.text_area(
-        "Schema JSON:", 
-        value=schema_str, 
+        "Schema JSON:",
+        value=schema_str,
         height=400,
         key="manual_edit_textarea",
-        help="Modifica lo schema JSON secondo le tue esigenze"
+        help="Modifica lo schema JSON secondo le tue esigenze. Aggiungi campi 'description' per documentare ogni proprietà."
     )
 
-    col1, col2 = st.columns(2)
-    if col1.button("✅ Conferma Modifiche", use_container_width=True, key="confirm_manual_edit"):
+    col1, col2, col3 = st.columns(3)
+
+    # Salvataggio diretto su DB
+    if col1.button("💾 Salva Direttamente su DB", use_container_width=True, key="save_direct_to_db", type="primary"):
+        try:
+            # Validazione JSON
+            validated_schema = json.loads(edited_schema_str)
+
+            # Salva su DB immediatamente
+            if _save_schema_to_distribution(st, validated_schema, repos):
+                st.session_state.generated_schema = validated_schema
+                st.session_state.edited_schema = validated_schema
+                st.session_state.manual_edit_active = False
+                st.success("✅ Schema salvato con successo nel database!")
+                st.rerun()
+            else:
+                st.error("❌ Errore nel salvataggio dello schema nel database")
+        except json.JSONDecodeError as e:
+            logger.error(f"Errore di parsing JSON: {e}")
+            st.error(f"❌ Errore: JSON non valido - {e}")
+        except Exception as e:
+            logger.error(f"Errore imprevisto: {e}")
+            st.error(f"❌ Errore imprevisto: {e}")
+
+    # Conferma e review (solo session)
+    if col2.button("✅ Conferma e Rivedi", use_container_width=True, key="confirm_manual_edit"):
         try:
             # Validazione JSON
             validated_schema = json.loads(edited_schema_str)
@@ -189,7 +230,8 @@ def _render_manual_edit_interface(st):
             logger.error(f"Errore imprevisto: {e}")
             st.error(f"❌ Errore imprevisto: {e}")
 
-    if col2.button("❌ Annulla Modifica", use_container_width=True, key="cancel_manual_edit"):
+    # Annulla
+    if col3.button("❌ Annulla", use_container_width=True, key="cancel_manual_edit"):
         st.session_state.manual_edit_active = False
         st.rerun()
 
@@ -308,7 +350,7 @@ def show_schema_extraction(st, langfuse_handler=None):
     if st.session_state.validation_success:
         _render_success_interface(st, repos)
     elif st.session_state.manual_edit_active:
-        _render_manual_edit_interface(st)
+        _render_manual_edit_interface(st, repos)
     elif st.session_state.generated_schema:
         _render_review_interface(st, repos)
 

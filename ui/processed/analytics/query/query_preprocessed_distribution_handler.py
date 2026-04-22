@@ -6,6 +6,8 @@ from typing import Dict, Any, Optional
 import jsonschema
 import duckdb
 import numpy as np
+import json
+import gzip
 
 import logging
 
@@ -13,6 +15,7 @@ from utils.path_utils import to_binded_path
 from utils.streamlit_func import reset_dashboard_session_state
 from utils.sample_reader import load_dataset_samples
 from utils.extract_glob import generate_dataset_globs
+from utils.serializer import process_record_for_json
 
 from data_class.repository.table.distribution_repository import DistributionRepository  # CORRETTO: repository non data_class.repository
 from data_class.repository.table.dataset_repository import DatasetRepository
@@ -27,6 +30,7 @@ from data_class.entity.table.dataset import Dataset
 
 BASE_PREFIX = os.getenv("BASE_PREFIX")
 METADATA_FILE_SUFFIX = os.getenv("METADATA_FILE_SUFFIX")
+DISPLAY_LIMIT = 500  # Limite massimo di righe per la visualizzazione nell'UI
 
 from config.state_vars import distribution_keys
 from utils.path_utils import to_binded_path, to_internal_path
@@ -231,12 +235,14 @@ def _render_query_interface(st, data_path: str, file_extension: str):
     col_exec1, col_exec2 = st.columns([3, 1])
     
     with col_exec1:
-        limit_results = st.number_input(
-            "Limite risultati per l'esecuzione SQL (LIMIT)", 
-            min_value=1,
-            value=st.session_state.get("limit_results_input", 100),  # Mantenuto 100 come da step2
-            key="limit_results_input",
-            help="Numero massimo di righe che DuckDB leggerà ed elaborerà."
+        st.info("💡 La query eseguirà su TUTTI i dati. La visualizzazione sarà troncata a 500 righe.")
+        limit_display = st.number_input(
+            "Max righe da visualizzare:",
+            min_value=10,
+            value=500,
+            step=100,
+            key="limit_display_input",
+            help="Solo per il display. La query eseguirà su TUTTI i dati."
         )
     
     def execute_query_callback():
@@ -260,62 +266,68 @@ def _execute_sql_query(st):
     """Esegue la query SQL e gestisce i risultati."""
     if not st.session_state.get('run_query', False):
         return
-        
+
     st.session_state.run_query = False
-    
+
     try:
         with duckdb.connect() as conn:
             st.info("🔄 Esecuzione query in corso...")
-            
+
             query_base = st.session_state.last_query.strip()
-            limit_value = st.session_state.get("limit_results_input", 100)
+            user_limit = st.session_state.get("limit_display_input", 500)
             folder_name = st.session_state.get('result_folder_name', '').strip()
-            
+
+            # Calcola il limite effettivo: min tra DISPLAY_LIMIT e user_limit
+            effective_limit = min(DISPLAY_LIMIT, user_limit)
+
             # Rimuovi eventuale punto e virgola finale
             query_clean = query_base.rstrip(' \t\n\r;')
             query_lower = query_clean.lower()
-            
+
             # Controlla se ha già LIMIT
             if " limit " in query_lower:
                 st.warning("⚠️ **ATTENZIONE**: LIMIT specificato nella query. Il valore della UI verrà ignorato.")
                 query_with_limit = query_clean
             else:
-                query_with_limit = f"{query_clean} LIMIT {limit_value}"
-                st.info(f"✨ Aggiunta clausola **LIMIT {limit_value}**")
-            
+                query_with_limit = f"{query_clean} LIMIT {effective_limit}"
+                st.info(f"✨ Aggiunta clausola **LIMIT {effective_limit}** (su max {DISPLAY_LIMIT})")
+
             # --- MODIFICA PRINCIPALE: Wrap la query per modificare _subpath ---
             # Costruisci query finale che modifica _subpath
             final_query = f"""
-SELECT 
+SELECT
     t.* EXCLUDE (_subpath),
     split_part(t._subpath, '/', 1) || '/{folder_name}' AS _subpath
 FROM (
     {query_with_limit}
 ) AS t
 """
-            
+
             # Memorizza la query originale e quella modificata
             st.session_state.original_query = query_clean
             st.session_state.modified_query = final_query
             st.session_state.result_folder_name = folder_name
-            
+
             # Esegui query
             print("Eseguendo query SQL modificata:", final_query)
             result = conn.execute(final_query).fetchdf()
             st.session_state.executed_query = final_query
-            
+
+            # Salva la query originale per il re-fetch al salvataggio
+            st.session_state.original_query_for_save = query_clean
+
             st.session_state.query_result_df = result
-                       
+
     except Exception as e:
         st.error(f"❌ Errore nell'esecuzione della query: {str(e)}")
-        
+
         if 'query_result_df' in st.session_state:
             del st.session_state.query_result_df
-        
+
         # Debug: mostra la query che ha causato l'errore
         if 'final_query' in locals():
             st.info(f"💡 **Query che ha causato l'errore:**\n```sql\n{final_query}\n```")
-        
+
         # Suggerimenti per errori comuni
         if "no such file" in str(e).lower():
             st.info("💡 **Suggerimento**: Verifica il path ai file")
@@ -444,35 +456,117 @@ def _render_save_interface(st, result, repos: Dict):
 
 def _handle_save_confirmation(st, result, destination_path: Path, folder_name: str, materialize_dataset: bool, repos: Dict):
     """Gestisce la conferma del salvataggio."""
-  
-    with st.spinner("Salvataggio in corso..."):
-        if materialize_dataset:
-            success = _save_query_results(st, result, destination_path, repos)
+    try:
+        logger.info(f"[_handle_save_confirmation] Inizio salvataggio. Destinazione: {destination_path}, Materializzazione: {materialize_dataset}")
+
+        try:
+            if materialize_dataset:
+                logger.info("[_handle_save_confirmation] Inizio salvataggio materializzato")
+                success = _save_query_results(st, result, destination_path, repos)
+                logger.info(f"[_handle_save_confirmation] Salvataggio materializzato completato. Success: {success}")
+            else:
+                logger.info("[_handle_save_confirmation] Inizio creazione distribuzione (non materializzato)")
+                success = _create_query_distribution(st, destination_path, False, repos)
+                logger.info(f"[_handle_save_confirmation] Creazione distribuzione completata. Success: {success}")
+        except Exception as e:
+            logger.error(f"[_handle_save_confirmation] ERRORE durante salvataggio: {str(e)}", exc_info=True)
+            st.error(f"❌ Errore durante il salvataggio: {str(e)}")
+            st.session_state.save_error_msg = f"❌ Salvataggio fallito: {str(e)}"
+            st.session_state.save_state = 2
+            return
+
+        logger.info(f"[_handle_save_confirmation] Salvataggio completato. Success: {success}")
+
+        if success and not materialize_dataset:
+            st.session_state.save_success_msg = f"✅ Distribuzione acquisita nel sistema"
+            st.session_state.save_state = 1  # Stato di successo
+            logger.info("[_handle_save_confirmation] Stato impostato a SUCCESSO (non materializzato)")
+        elif success and materialize_dataset:
+            st.session_state.save_success_msg = f"✅ Risultati salvati e distribuzione creata con successo in `{Path(st.session_state.selected_dataset_path) / folder_name.strip()}`"
+            st.session_state.save_state = 1  # Stato di successo
+            logger.info("[_handle_save_confirmation] Stato impostato a SUCCESSO (materializzato)")
         else:
-            success = _create_query_distribution(st, destination_path, False, repos)
-    
-    if success and not materialize_dataset:
-        st.session_state.save_success_msg = f"✅ Distribuzione acquisita nel sistema"
-        st.session_state.save_state = 1  # Stato di successo
-    elif success and materialize_dataset:
-        st.session_state.save_success_msg = f"✅ Risultati salvati e distribuzione creata con successo in `{Path(st.session_state.selected_dataset_path) / folder_name.strip()}`"
-        st.session_state.save_state = 1  # Stato di successo
-    else:
-        st.session_state.save_error_msg = "❌ Salvataggio fallito. Controlla il log."
-        st.session_state.save_state = 2  # Stato di errore
+            st.session_state.save_error_msg = "❌ Salvataggio fallito. Controlla il log."
+            st.session_state.save_state = 2  # Stato di errore
+            logger.error("[_handle_save_confirmation] Salvataggio fallito (success=False)")
+
+        logger.info("[_handle_save_confirmation] Salvataggio completato e stato impostato")
+
+    except Exception as e:
+        logger.error(f"[_handle_save_confirmation] ERRORE ESTERNO: {str(e)}", exc_info=True)
+        st.error(f"❌ Errore inaspettato: {str(e)}")
+        st.session_state.save_state = 2
 
 def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict) -> bool:
     """
     Salva i risultati della query in file JSONL.GZ suddivisi
     in base alla dimensione in memoria e alla dimensione target per file.
+
+    Re-esegue la query con il LIMITE inserito dall'utente per il salvataggio,
+    salva localmente (non in session_state), poi lo persiste su disco.
     """
     TARGET_FILE_SIZE_MB = 120.0  # Dimensione massima target per file (non rigida)
     BYTES_TO_MB = 1024 * 1024
-    
+
     try:
-        # 1. Controlli Iniziali e Preparazione Cartella
+        logger.info("[_save_query_results] INIZIO salvataggio query results")
+
+        # 1. RE-ESECUZIONE DELLA QUERY CON LIMITE UTENTE
+        # Recupera la query originale e il limite inserito
+        query_original = st.session_state.get('original_query_for_save', '')
+        user_limit = st.session_state.get("limit_display_input", 500)
+        folder_name = st.session_state.get('result_folder_name', '').strip()
+
+        logger.info(f"[_save_query_results] Parametri: user_limit={user_limit}, folder_name={folder_name}, query_original_len={len(query_original)}")
+
+        if not query_original:
+            st.error("❌ Impossibile recuperare la query originale per il salvataggio.")
+            logger.error("[_save_query_results] Query originale non trovata in session_state")
+            return False
+
+        st.info(f"🔄 Re-esecuzione query con LIMIT {user_limit} per il salvataggio...")
+        logger.info(f"[_save_query_results] Re-esecuzione query con LIMIT {user_limit}")
+
+        with duckdb.connect() as conn:
+            logger.info("[_save_query_results] Connessione DuckDB aperta")
+
+            # Rimuovi eventuale punto e virgola finale
+            query_clean = query_original.rstrip(' \t\n\r;')
+            query_lower = query_clean.lower()
+
+            # Controlla se ha già LIMIT
+            if " limit " in query_lower:
+                # Se la query ha già limit, la usiamo così com'è
+                query_with_limit = query_clean
+                logger.info("[_save_query_results] Query contiene già LIMIT, usata così com'è")
+            else:
+                # Aggiungi il limit inserito dall'utente
+                query_with_limit = f"{query_clean} LIMIT {user_limit}"
+                logger.info(f"[_save_query_results] Aggiunto LIMIT {user_limit} alla query")
+
+            # Wrap la query per modificare _subpath
+            full_query = f"""
+SELECT
+    t.* EXCLUDE (_subpath),
+    split_part(t._subpath, '/', 1) || '/{folder_name}' AS _subpath
+FROM (
+    {query_with_limit}
+) AS t
+"""
+
+            # Esegui query con il limite dell'utente
+            logger.info("[_save_query_results] Esecuzione query con limit utente")
+            print("[_save_query_results] Esecuzione query con limit utente:", full_query)
+            full_result_df = conn.execute(full_query).fetchdf()
+            logger.info(f"[_save_query_results] Query eseguita. Righe restituite: {len(full_result_df)}")
+
+        result_df = full_result_df  # Usa il dataframe con limite utente per il salvataggio
+        logger.info(f"[_save_query_results] DataFrame assegnato. Righe: {len(result_df)}, Colonne: {len(result_df.columns)}")
+
+        # 2. Controlli Iniziali e Preparazione Cartella
         if result_df.empty:
             st.info("⚠️ DataFrame vuoto. Nessun file da salvare.")
+            logger.info("[_save_query_results] DataFrame vuoto, passaggio a creazione distribuzione")
             return _create_query_distribution(st, destination_path, False, repos)
 
         if destination_path.exists() and any(destination_path.iterdir()):
@@ -480,80 +574,98 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
             logger.error(f"[_save_query_results] Cartella esiste già: {destination_path}")
             return False
 
+        logger.info(f"[_save_query_results] Creazione cartella: {destination_path}")
         destination_path.mkdir(parents=True, exist_ok=True)
         st.info(f"📁 Creata nuova cartella: {destination_path}")
+        logger.info(f"[_save_query_results] Cartella creata con successo")
 
-        # 2. Calcolo della Suddivisione (Logica Semplificata Richiesta)
-        # Dimensione totale del DataFrame in memoria (in MB)
+        # 3. Calcolo della Suddivisione
         total_size_bytes = result_df.memory_usage(deep=True).sum()
         total_size_mb = total_size_bytes / BYTES_TO_MB
-        # Calcolo del rapporto e logica di arrotondamento
         ratio = total_size_mb / TARGET_FILE_SIZE_MB
         if ratio % 1 > 0.5:
             num_chunks = int(np.ceil(ratio))
         else:
             num_chunks = int(np.floor(ratio))
-            num_chunks = max(1, num_chunks) 
-            
+            num_chunks = max(1, num_chunks)
+
         num_records = len(result_df)
         chunk_size = int(np.ceil(num_records / num_chunks))
 
         logger.info(f"[_save_query_results] Dimensione totale (memoria): {total_size_mb:.2f} MB")
         logger.info(f"[_save_query_results] Suddivisione in {num_chunks} chunk (target {TARGET_FILE_SIZE_MB} MB), chunk_size: {chunk_size}")
-        
-        # 3. Pre-calcolo: determiniamo se la colonna _filename esiste
+
+        # 4. Pre-calcolo: determiniamo se la colonna _filename esiste
         filename_column_exists = '_filename' in result_df.columns
-        
-        # 4. Salvataggio per Chunk
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
+        logger.info(f"[_save_query_results] Colonna _filename esiste: {filename_column_exists}")
+
+        # 5. Salvataggio per Chunk
+        logger.info(f"[_save_query_results] INIZIO salvataggio {num_chunks} chunk")
+
         for i in range(num_chunks):
             start_idx = i * chunk_size
             end_idx = min(start_idx + chunk_size, num_records)
-            
-            if start_idx >= num_records: 
-                break 
+
+            if start_idx >= num_records:
+                break
+
+            logger.info(f"[_save_query_results] Salvataggio chunk {i+1}/{num_chunks} (righe {start_idx}-{end_idx})")
 
             # OPTIMIZATION: Estrazione diretta senza copia iniziale
+            logger.info(f"[_save_query_results] Estrazione slice del dataframe...")
             chunk_df = result_df.iloc[start_idx:end_idx]
+            logger.info(f"[_save_query_results] Slice estratto: {len(chunk_df)} righe")
+
             file_name = f"query_results_{i+1:05d}.jsonl.gz"
             output_file = destination_path / file_name
-            
-            # OPTIMIZATION: Modifica mirata del campo _filename con assign() 
-            # che è più efficiente di copiare l'intero dataframe
-            if filename_column_exists:
-                # Usiamo assign() che modifica in modo efficiente
-                chunk_df = chunk_df.assign(_filename=file_name)
-            else:
-                # Se la colonna non esiste, la creiamo
-                chunk_df = chunk_df.assign(_filename=file_name)
-            
-            status_text.text(f"Salvataggio file {i+1}/{num_chunks} ({len(chunk_df)} record)...")
-            
-            chunk_df.to_json(
-                output_file,
-                orient='records',
-                lines=True,
-                force_ascii=False,
-                compression='gzip'
-            )
-            
-            del chunk_df
-            progress_bar.progress((i + 1) / num_chunks)
-        
-        progress_bar.progress(1.0)
-        status_text.empty()
-        
-        files_created = list(destination_path.glob("*.jsonl.gz"))
-        st.success(f"✅ Salvataggio completato in {len(files_created)} file!")
-        st.info(f"📊 Totale: {num_records} record(s) in {len(files_created)} file(s)")
+            logger.info(f"[_save_query_results] Nome file: {file_name}, Path: {output_file}")
 
-        return _create_query_distribution(st, destination_path, True, repos)
-        
+            # OPTIMIZATION: Modifica mirata del campo _filename con assign()
+            logger.info(f"[_save_query_results] PRE-ASSIGN: colonne={list(chunk_df.columns)}")
+            chunk_df = chunk_df.assign(_filename=file_name)
+            logger.info(f"[_save_query_results] POST-ASSIGN OK: colonne={list(chunk_df.columns)}")
+
+            try:
+                logger.info(f"[_save_query_results] PRIMA DELLA SCRITTURA: shape={chunk_df.shape}, size={len(chunk_df)}")
+
+                # Scrittura MANUALE linea per linea per evitare blocco di pandas
+                logger.info(f"[_save_query_results] Inizio scrittura manuale JSONL.GZ...")
+                with gzip.open(str(output_file), 'wt', encoding='utf-8') as f_gz:
+                    for idx, row in chunk_df.iterrows():
+                        row_dict = row.to_dict()
+                        # Usa la funzione robusta di serializzazione del progetto
+                        row_dict_clean = process_record_for_json(row_dict)
+                        json_line = json.dumps(row_dict_clean, ensure_ascii=False)
+                        f_gz.write(json_line + '\n')
+
+                logger.info(f"[_save_query_results] File scritto con successo: {output_file}")
+            except Exception as write_error:
+                logger.error(f"[_save_query_results] ERRORE nella scrittura del file: {str(write_error)}", exc_info=True)
+                st.error(f"❌ Errore nella scrittura del file {file_name}: {str(write_error)}")
+                raise
+
+            del chunk_df
+
+        logger.info(f"[_save_query_results] FINE salvataggio file")
+
+        files_created = list(destination_path.glob("*.jsonl.gz"))
+        logger.info(f"[_save_query_results] Salvataggio file completato. {len(files_created)} file creati.")
+        logger.info(f"[_save_query_results] TOTALE: {num_records} record(s) in {len(files_created)} file(s)")
+
+        logger.info(f"[_save_query_results] INIZIO creazione distribuzione con materialize=True")
+        result = _create_query_distribution(st, destination_path, True, repos)
+        logger.info(f"[_save_query_results] Creazione distribuzione completata. Result: {result}")
+
+        # Mostra messaggi SOLO dopo aver completato tutto
+        if result:
+            st.success(f"✅ Salvataggio completato in {len(files_created)} file!")
+            st.info(f"📊 Totale: {num_records} record(s) in {len(files_created)} file(s)")
+
+        return result
+
     except Exception as e:
         st.error(f"❌ Errore nel salvataggio: {str(e)}")
-        logger.error(f"[_save_query_results] Errore generale: {str(e)}")
+        logger.error(f"[_save_query_results] Errore generale: {str(e)}", exc_info=True)
         return False
    
 def _create_query_distribution(st, destination_path: Path, materialize: bool, repos: Dict) -> bool:
@@ -561,22 +673,29 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
     try:
         from datetime import datetime, timezone
         import copy
-        
+
+        logger.info(f"[_create_query_distribution] INIZIO creazione distribuzione. Path: {destination_path}, Materialize: {materialize}")
+
         current_dist = st.session_state.current_distribution
+        logger.info(f"[_create_query_distribution] current_distribution caricata: {current_dist.id if current_dist else 'None'}")
+
         old_dataset = repos['dataset'].get_by_id(current_dist.dataset_id)
-        
+        logger.info(f"[_create_query_distribution] old_dataset caricato: {old_dataset.id if old_dataset else 'None'}")
+
         if not old_dataset:
             st.error("❌ Dataset originale non trovato nel database.")
+            logger.error("[_create_query_distribution] Dataset originale non trovato")
             return False
 
         # 1. Prepariamo l'URI della nuova distribuzione
         new_dist_uri = f"{BASE_PREFIX}{to_binded_path(str(destination_path))}"
-        
+        logger.info(f"[_create_query_distribution] new_dist_uri calcolata: {new_dist_uri}")
+
         # 2. Logica Critica: Verifica appartenenza gerarchica
         # Se l'URI del dataset è uguale all'URI della nuova distribuzione
         if old_dataset.uri == current_dist.uri:
             logger.info("⚠️ Nuova distribuzione fuori dal path del dataset originale. Creazione nuovo Dataset.")
-            
+
             # Creiamo il nuovo dataset ereditando i campi
             new_dataset = Dataset(
                 id=None,  # Sarà generato dal DB
@@ -591,11 +710,12 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
                 source=old_dataset.source,
                 version=old_dataset.version,
                 license=old_dataset.license,
-                step=2, 
+                step=2,
                 issued=datetime.now(timezone.utc),
                 modified=datetime.now(timezone.utc)
             )
-            
+
+            logger.info(f"[_create_query_distribution] Inserimento nuovo dataset...")
             # Inseriamo il nuovo dataset per ottenere l'ID
             new_dataset_obj = repos['dataset'].insert(new_dataset)
             target_dataset_id = new_dataset_obj.id
@@ -603,19 +723,21 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
         else:
             # Caso standard: la distribuzione è una sottocartella del dataset esistente
             target_dataset_id = old_dataset.id
+            logger.info(f"[_create_query_distribution] Usando dataset esistente con ID: {target_dataset_id}")
 
         # 3. Creazione della Nuova Distribuzione
         tags = current_dist.tags or []
         if not isinstance(tags, list):
             tags = list(tags) if tags else []
 
+        logger.info(f"[_create_query_distribution] Creazione oggetto Distribution...")
         new_distribution = Distribution(
             id=None,
             uri=new_dist_uri,
             tokenized_uri=None,
             dataset_id=target_dataset_id,  # Punterà al nuovo dataset o al vecchio
-            glob='*.jsonl.gz', 
-            format='.jsonl.gz',  
+            glob='*.jsonl.gz',
+            format='.jsonl.gz',
             query=_compact_sql_query(st.session_state.get('executed_query', '')),
             derived_from=current_dist.id,
             split=current_dist.split,
@@ -623,31 +745,41 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
             name=f"query__{destination_path.name}__{current_dist.name}",  # Mantenuto formato step2
             description=f"Risultati query eseguita il {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} su {current_dist.name} dataset.",  # Mantenuto formato step2
             lang=current_dist.lang,
-            tags=tags + ["query"], 
+            tags=tags + ["query"],
             license=current_dist.license,
             version=current_dist.version,
             issued=datetime.now(timezone.utc),
             modified=datetime.now(timezone.utc),
             materialized=materialize,
-            step=2  
+            step=2
         )
 
+        logger.info(f"[_create_query_distribution] Inserimento distribuzione nel repository...")
         dist_result = repos['distribution'].insert(new_distribution)
+        logger.info(f"[_create_query_distribution] Distribuzione inserita: {dist_result.id if dist_result else 'None'}")
 
         # 4. Aggiornamento globs se materializzato
         if materialize and dist_result:
+            logger.info(f"[_create_query_distribution] Aggiornamento globs per dataset ID: {target_dataset_id}")
             target_ds = repos['dataset'].get_by_id(target_dataset_id)
             if target_ds:
                 target_ds.globs = generate_dataset_globs(target_ds.uri)
+                logger.info(f"[_create_query_distribution] Aggiornamento dataset con nuovi globs...")
                 repos['dataset'].update(target_ds)
+                logger.info(f"[_create_query_distribution] Dataset aggiornato")
+            else:
+                logger.warning(f"[_create_query_distribution] Dataset non trovato per aggiornamento globs")
 
         if dist_result:
             st.success(f"✅ Distribuzione registrata con successo (ID: {dist_result.id})")
+            logger.info(f"[_create_query_distribution] SUCCESSO completo. Distribuzione ID: {dist_result.id}")
             return True
         else:
+            logger.error("[_create_query_distribution] insert() ha restituito None/False")
             return False
-            
+
     except Exception as e:
+        logger.error(f"[_create_query_distribution] ERRORE CRITICO: {str(e)}", exc_info=True)
         st.error(f"❌ Errore nella creazione distribuzione/dataset: {str(e)}")
         logger.error(traceback.format_exc())
         return False

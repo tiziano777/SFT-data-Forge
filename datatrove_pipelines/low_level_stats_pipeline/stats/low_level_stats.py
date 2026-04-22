@@ -82,41 +82,64 @@ class DocStats(BaseStats):
         """
         Sovrascrive completamente il metodo run per generare SOLO tabular stats.
         """
+        import logging
+        import pandas as pd
+        import traceback
+        logger = logging.getLogger(__name__)
+
+        debug_log = f"/tmp/docstats_debug_rank{rank:05d}.log"
+
+        def dlog(msg):
+            print(f"[DOCSTATS_DEBUG] {msg}", flush=True)
+            with open(debug_log, "a") as f:
+                f.write(msg + "\n")
+
+        dlog(f"=== DocStats.run START rank={rank} world_size={world_size} ===")
+        dlog(f"output_folder type: {type(self.output_folder)}")
+        dlog(f"output_folder repr: {repr(self.output_folder)}")
+        try:
+            dlog(f"output_folder.path: {self.output_folder.path}")
+        except Exception as e:
+            dlog(f"output_folder.path ERROR: {e}")
+
         tabular_stats = []
 
-        for doc in data:
-            with self.track_time():
+        try:
+            for doc in data:
+                with self.track_time():
+                    try:
+                        doc_stats = self.extract_stats(doc)
+                    except Exception as e:
+                        dlog(f"extract_stats error on doc {doc.id}: {e}\n{traceback.format_exc()}")
+                        logger.error(f"Error while extracting stats from document {doc.id}", exc_info=e)
+                        yield doc
+                        continue
+
+                    tabular_stats.append({'id': doc.id, **doc_stats})
+
+                yield doc
+        except Exception as loop_exc:
+            dlog(f"LOOP EXCEPTION: {loop_exc}\n{traceback.format_exc()}")
+            raise
+        finally:
+            dlog(f"finally: tabular_stats count={len(tabular_stats)}")
+            if tabular_stats:
                 try:
-                    doc_stats = self.extract_stats(doc)
-                except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Error while extracting stats from document {doc.id}", exc_info=e)
-                    raise e
-
-                # SALVA SOLO LE TABULAR STATS
-                tabular_record = {
-                    'id': doc.id,
-                    **doc_stats  # Unpack tutte le statistiche allo stesso livello
-                }
-                tabular_stats.append(tabular_record)
-
-                # OPZIONALE: aggiorna i metadati se serve per downstream
-                # doc.metadata.update(doc_stats)
-
-            yield doc
-
-        # SALVA LE TABULAR STATS
-        if tabular_stats:
-            import pandas as pd
-            df = pd.DataFrame(tabular_stats)
-            stats_path= self.output_folder.path 
-            import os
-            if not os.path.exists(stats_path):
-                os.makedirs(stats_path)
-            df.to_parquet(stats_path + f"/low_level_stats_{rank:05d}.parquet", index=False)
-            
-        print(f"✅ Generate {len(tabular_stats)} tabular stats records")
+                    stats_path = self.output_folder.path
+                    dlog(f"stats_path from output_folder.path: {stats_path!r}")
+                    os.makedirs(stats_path, exist_ok=True)
+                    out_file = os.path.join(stats_path, f"low_level_stats_{rank:05d}.parquet")
+                    dlog(f"writing parquet to: {out_file}")
+                    pd.DataFrame(tabular_stats).to_parquet(out_file, index=False)
+                    dlog(f"✅ WRITE OK: {out_file}")
+                    print(f"✅ Salvati {len(tabular_stats)} record → {out_file}")
+                except Exception as save_exc:
+                    dlog(f"SAVE ERROR: {save_exc}\n{traceback.format_exc()}")
+                    logger.error(f"[rank={rank}] Errore salvataggio parquet", exc_info=save_exc)
+            else:
+                dlog(f"[rank={rank}] tabular_stats vuoto — nessun documento ricevuto dal reader")
+                logger.warning(f"[rank={rank}] Nessun record da salvare — controlla che il reader abbia trovato file.")
+        dlog("=== DocStats.run END ===")
 
     def _load_stopwords(self, lang: str) -> set:
         """Carica le stopwords per una lingua con caching."""

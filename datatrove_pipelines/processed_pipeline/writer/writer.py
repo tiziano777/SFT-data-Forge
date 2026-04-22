@@ -142,18 +142,17 @@ class BaseCustomWriter:
                     yield document
 
                 except Exception as e:
-                    logger.info(f"Errore documento {stats['total']}: {e}", flush=True)
+                    logger.info(f"Errore documento {stats['total']}: {e}")
                     stats["errors"] += 1
                     continue
 
         finally:
-            logger.info(f"Chiusura {len(self._file_handles)} file handle...", flush=True)
+            logger.info(f"Chiusura {len(self._file_handles)} file handle...")
             self._close_handles()
 
             logger.info(
                 f"\n--- Report Finale ---\n"
                 f"Documenti: {stats['total']} | Scritti: {stats['written']} | Errori: {stats['errors']}",
-                flush=True,
             )
 
     def __exit__(self, exc_type, exc_val, exc_tb):

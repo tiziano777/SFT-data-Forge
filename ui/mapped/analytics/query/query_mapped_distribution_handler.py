@@ -1,6 +1,8 @@
 # ui/mapped/analytics/query/query_mapped_distribution_handler.py
 import os
 import traceback
+import gzip
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 import duckdb
@@ -10,6 +12,7 @@ import logging
 from utils.path_utils import to_binded_path
 from utils.streamlit_func import reset_dashboard_session_state
 from utils.extract_glob import generate_dataset_globs
+from utils.serializer import process_record_for_json
 from data_class.repository.table.distribution_repository import DistributionRepository
 from data_class.repository.table.dataset_repository import DatasetRepository
 
@@ -18,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 from data_class.entity.table.distribution import Distribution
 from data_class.entity.table.dataset import Dataset # <--- MODIFICA: Import necessario per creare un nuovo Dataset
+
+# Display limit per Streamlit UI
+DISPLAY_LIMIT = 500
 
 # Configurazione ambiente
 
@@ -183,9 +189,10 @@ def _execute_sql_query(st):
         # Usiamo un'unica connessione DuckDB per probe ed esecuzione
         with duckdb.connect() as conn:
             st.info("🔄 Analisi schema e query in corso...")
-            
+
             query_base = st.session_state.last_query.strip()
-            limit_value = st.session_state.get("limit_results_input", 100)
+            user_limit = st.session_state.get("limit_results_input", 100)
+            effective_limit = min(DISPLAY_LIMIT, user_limit)
             folder_name = st.session_state.get('result_folder_name', '').strip()
             
             # 1. Pulizia query e gestione LIMIT
@@ -196,7 +203,7 @@ def _execute_sql_query(st):
                 st.warning("⚠️ **ATTENZIONE**: LIMIT rilevato nella query originale. Il valore della UI verrà ignorato.")
                 query_with_limit = query_clean
             else:
-                query_with_limit = f"{query_clean} LIMIT {limit_value}"
+                query_with_limit = f"{query_clean} LIMIT {effective_limit}"
             
             # 2. SCHEMA PROBING: Controlliamo se _subpath esiste nella sorgente
             # Eseguiamo a LIMIT 0 per essere istantanei
@@ -293,7 +300,7 @@ def _render_query_results(st, repos: Dict):
         st.metric("Righe visualizzate", len(result))
     
     # Visualizza tabella risultati
-    st.dataframe(result, height=400)
+    st.dataframe(result.head(int(DISPLAY_LIMIT)), height=400)
     
     if 'options_expanded' not in st.session_state:
         st.session_state.options_expanded = False
@@ -482,14 +489,16 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
                 chunk_df = chunk_df.assign(_filename=file_name)
             
             status_text.text(f"Salvataggio file {i+1}/{num_chunks} ({len(chunk_df)} record)...")
-            
-            chunk_df.to_json(
-                output_file,
-                orient='records',
-                lines=True,
-                force_ascii=False,
-                compression='gzip'
-            )
+
+            try:
+                with gzip.open(str(output_file), 'wt', encoding='utf-8') as f_gz:
+                    for idx, row in chunk_df.iterrows():
+                        row_dict_clean = process_record_for_json(row.to_dict())
+                        f_gz.write(json.dumps(row_dict_clean, ensure_ascii=False) + '\n')
+            except Exception as e:
+                st.error(f"❌ Errore nel salvataggio del file {file_name}: {str(e)}")
+                logger.error(f"[_save_query_results] Errore salvataggio file {file_name}: {str(e)}")
+                return False
             
             del chunk_df
             progress_bar.progress((i + 1) / num_chunks)

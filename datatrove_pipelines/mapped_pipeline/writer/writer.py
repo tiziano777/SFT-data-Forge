@@ -1,6 +1,8 @@
 import gzip
 import json
 import logging
+import os
+import sys
 from abc import abstractmethod
 from pathlib import Path
 from typing import Callable, IO
@@ -9,6 +11,19 @@ from datatrove.data import DocumentsPipeline, Document
 from utils.path_utils import to_binded_path
 
 logger = logging.getLogger(__name__)
+
+# Importa serializzazione robusta
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+try:
+    from utils.serializer import process_record_for_json
+except ImportError as e:
+    logger.warning(f"Impossibile importare serializer: {e}")
+    def process_record_for_json(obj):
+        """Fallback se serializer non disponibile."""
+        return obj
 
 
 class BaseCustomWriter:
@@ -134,30 +149,50 @@ class BaseCustomWriter:
 
     def run(self, data: DocumentsPipeline, rank: int = 0, world_size: int = 1) -> DocumentsPipeline:
         """Loop principale della pipeline per la gestione dei documenti e sharding."""
+        stats = {"total": 0, "written": 0, "errors": 0}
+
         try:
             for document in data:
-                document_data = self._prepare_document_data(document)
+                stats["total"] += 1
+                try:
+                    document_data = self._prepare_document_data(document)
 
-                # Calcolo path e gestione nome file univoco (sharding)
-                output_dir, output_filename = self._get_output_info_for_document(document_data["metadata"])
-                output_dir.mkdir(parents=True, exist_ok=True)
+                    # Calcolo path e gestione nome file univoco (sharding)
+                    output_dir, output_filename = self._get_output_info_for_document(document_data["metadata"])
+                    output_dir.mkdir(parents=True, exist_ok=True)
 
-                stem = output_filename.split('.')[0]
-                final_filename = f"{stem}_{rank:05d}{self.FILE_EXTENSION}"
-                file_path = output_dir / final_filename
+                    stem = output_filename.split('.')[0]
+                    final_filename = f"{stem}_{rank:05d}{self.FILE_EXTENSION}"
+                    file_path = output_dir / final_filename
 
-                # Allineamento cruciale: il metadato deve corrispondere al file fisico
-                document_data['metadata']['_filename'] = final_filename
+                    # Allineamento cruciale: il metadato deve corrispondere al file fisico
+                    document_data['metadata']['_filename'] = final_filename
 
-                handle_key = str(file_path)
-                if handle_key not in self._file_handles:
-                    self._file_handles[handle_key] = self._open_file_handler(file_path)
+                    handle_key = str(file_path)
+                    if handle_key not in self._file_handles:
+                        self._file_handles[handle_key] = self._open_file_handler(file_path)
 
-                transformed = self._transform_document(document_data)
-                self._write_to_handle(self._file_handles[handle_key], transformed)
-                yield document
+                    transformed = self._transform_document(document_data)
+                    self._write_to_handle(self._file_handles[handle_key], transformed)
+                    stats["written"] += 1
+                    yield document
+
+                except Exception as e:
+                    logger.error(
+                        f"[DOC_ERROR] Documento {stats['total']} fallito (rank={rank}). "
+                        f"ID: {document.id}, Lang: {document.metadata.get('_lang', 'N/A')}. "
+                        f"Error: {e}",
+                        exc_info=True
+                    )
+                    stats["errors"] += 1
+                    continue
+
         finally:
+            logger.info(f"Chiusura {len(self._file_handles)} file handle (rank={rank})...")
             self._close_handles()
+            logger.info(
+                f"[RANK_{rank}] Report: Total={stats['total']}, Written={stats['written']}, Errors={stats['errors']}"
+            )
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
@@ -193,5 +228,29 @@ class CustomJsonlWriter(BaseCustomWriter):
         return gzip.open(file_path, "wb")
 
     def _write_to_handle(self, handle: IO, transformed: dict):
-        json_data = json.dumps(transformed, ensure_ascii=False) + '\n'
-        handle.write(json_data.encode('utf-8'))
+        """Scrivi un record trasformato, con serializzazione robusta."""
+        try:
+            # Serializza ricorsivamente per gestire tipi complessi
+            serialized = process_record_for_json(transformed)
+
+            # JSON dump con fallback
+            try:
+                json_data = json.dumps(serialized, ensure_ascii=False) + '\n'
+            except Exception as json_err:
+                logger.error(
+                    f"[JSON_DUMP_FALLBACK] Fallimento json.dumps su record. "
+                    f"Keys: {list(serialized.keys()) if isinstance(serialized, dict) else 'N/A'}. "
+                    f"Error: {json_err}"
+                )
+                json_data = json.dumps({"_serialization_error": str(serialized)}, ensure_ascii=False) + '\n'
+
+            handle.write(json_data.encode('utf-8'))
+
+        except Exception as write_err:
+            logger.error(
+                f"[WRITE_HANDLE_CRITICAL] Errore durante write. "
+                f"Record keys: {list(transformed.keys()) if isinstance(transformed, dict) else 'N/A'}. "
+                f"Error: {write_err}",
+                exc_info=True
+            )
+            raise

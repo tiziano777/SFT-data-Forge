@@ -10,6 +10,7 @@ from ui.dataset_card.dataset_download.downloader import DatasetDownloader
 from utils.fs_func import list_dirs
 from datetime import datetime
 from utils.extract_glob import generate_dataset_globs
+from utils.path_utils import to_binded_path
 
 RAW_DATA_DIR = os.getenv("RAW_DATA_DIR")
 BINDED_RAW_DATA_DIR = os.getenv("BINDED_RAW_DATA_DIR")
@@ -102,22 +103,27 @@ class DownloadPathNavigator:
     
     def _render_navigation_controls(self, current_path: str) -> Tuple[Optional[str], str]:
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
             if st.session_state.download_path_parts and st.button("⬅️ Indietro", use_container_width=True):
                 st.session_state.download_path_parts.pop()
                 st.rerun()
-        
+
         with col2:
             if st.session_state.download_path_parts and st.button("🏠 Radice", use_container_width=True):
                 st.session_state.download_path_parts = []
                 st.rerun()
-        
+
         with col3:
             if st.button("✅ Usa questa cartella", type="primary", use_container_width=True):
                 st.session_state.selected_download_path = current_path
+                st.success(f"✅ Percorso selezionato: `{current_path}`")
                 return current_path, "confermato"
-        
+
+        # Ritorna il path salvato nella sessione se disponibile, altrimenti None
+        if st.session_state.selected_download_path:
+            return st.session_state.selected_download_path, "confermato"
+
         return current_path if st.session_state.download_path_parts else None, "selezionato"
 
 class DownloadSourceSelector:
@@ -199,7 +205,7 @@ class DownloadSourceSelector:
 def show_download_interface(st):
     """Interfaccia principale per il download dei dataset"""
     st.header("📥 Download Dataset")
-    
+
     dataset_card = st.session_state.get('selected_dataset_card')
     if not dataset_card:
         st.error("Nessuna dataset card selezionata")
@@ -207,23 +213,32 @@ def show_download_interface(st):
             st.session_state.current_stage = "dataset_card_action_selection"
             st.rerun()
         return
-    
+
     # Converti in oggetto DatasetCard se è un dizionario
     if isinstance(dataset_card, dict):
         dataset_card = DatasetCard(**dataset_card)
-    
+
     downloader = DatasetDownloader(st.session_state.db_manager, BASE_PATH)
-    
+
     st.write(f"**Dataset:** {dataset_card.dataset_name}")
-    
+
     # Selezione percorso
     st.subheader("📍 Seleziona percorso di download")
     selected_path, path_status = _render_path_selection(st, dataset_card)
-    
+
+    # Salva il percorso in session state per preservarlo across reruns
+    if selected_path:
+        st.session_state.selected_download_path = selected_path
+
+    # Se il percorso non è disponibile ma è stato salvato, usalo
+    if not selected_path and st.session_state.get("selected_download_path"):
+        selected_path = st.session_state.selected_download_path
+        path_status = "confermato"
+
     # Selezione fonte
     st.subheader("🌐 Sorgente download")
     download_source, download_config, source_ready = DownloadSourceSelector.render_source_selection(dataset_card)
-    
+
     # Pulsante download
     st.markdown("---")
     _render_download_action(st, downloader, dataset_card, selected_path, path_status, download_config, source_ready)
@@ -231,10 +246,19 @@ def show_download_interface(st):
 def _render_path_selection(st, dataset_card: DatasetCard) -> Tuple[Optional[str], str]:
     """Renderizza la selezione del percorso"""
     mode = st.radio("Modalità selezione:", ["Naviga filesystem", "Inserisci manualmente"], horizontal=True, key="path_selection_mode")
-    
+
     if mode == "Naviga filesystem":
         navigator = DownloadPathNavigator(BASE_PATH)
-        return navigator.render_navigation_interface()
+        selected_path, path_status = navigator.render_navigation_interface()
+
+        # Se non selezionato ma salvato in session state precedentemente, usa quello
+        if not selected_path and st.session_state.get("selected_download_path"):
+            selected_path = st.session_state.selected_download_path
+            path_status = "confermato"
+
+        if not selected_path:
+            st.info("💡 Naviga fino ad una cartella e clicca '✅ Usa questa cartella' per procedere")
+        return selected_path, path_status
     else:
         return _render_manual_path_input(st, dataset_card)
 
@@ -295,6 +319,10 @@ def _render_download_action(st, downloader: DatasetDownloader, dataset_card,
             st.success(f"✅ {result.message}")
 
             # Calcola il path finale e salva le informazioni
+            if not selected_path:
+                st.error("❌ Percorso di download non valido")
+                return
+
             repo_parts = [p for p in repo_id.split('/') if p]
             final_storage_path = os.path.join(selected_path, *repo_parts)
             st.session_state.last_download_info = {

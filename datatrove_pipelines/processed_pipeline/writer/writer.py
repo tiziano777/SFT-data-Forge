@@ -10,6 +10,14 @@ from datatrove.data import DocumentsPipeline
 import logging
 logger = logging.getLogger(__name__)
 
+# Importa serializzazione robusta
+import sys
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from utils.serializer import process_record_for_json
+
 BINDED_PROCESSED_DATA_DIR = os.getenv("BINDED_PROCESSED_DATA_DIR")
 BINDED_RAW_DATA_DIR = os.getenv("BINDED_RAW_DATA_DIR")
 
@@ -142,7 +150,13 @@ class BaseCustomWriter:
                     yield document
 
                 except Exception as e:
-                    logger.info(f"Errore documento {stats['total']}: {e}")
+                    logger.error(
+                        f"[DOC_ERROR] Documento {stats['total']} fallito. "
+                        f"Lang: {document.metadata.get('_lang', 'N/A')}, "
+                        f"ID: {document.id}. "
+                        f"Error: {e}",
+                        exc_info=True
+                    )
                     stats["errors"] += 1
                     continue
 
@@ -151,7 +165,7 @@ class BaseCustomWriter:
             self._close_handles()
 
             logger.info(
-                f"\n--- Report Finale ---\n"
+                f"\n--- Report Finale (rank={rank}) ---\n"
                 f"Documenti: {stats['total']} | Scritti: {stats['written']} | Errori: {stats['errors']}",
             )
 
@@ -182,5 +196,29 @@ class CustomJsonlWriter(BaseCustomWriter):
         return gzip.open(file_path, "wb")
 
     def _write_to_handle(self, handle: IO, transformed: dict):
-        line = json.dumps(transformed, ensure_ascii=False) + "\n"
-        handle.write(line.encode("utf-8"))
+        """Scrivi un record trasformato, con serializzazione robusta e logging dei problemi."""
+        try:
+            # Serializza ricorsivamente per gestire tipi complessi (numpy, pandas, dict annidate)
+            serialized = process_record_for_json(transformed)
+
+            # JSON dump con logging di fallback
+            try:
+                line = json.dumps(serialized, ensure_ascii=False) + "\n"
+            except Exception as json_err:
+                logger.error(
+                    f"[JSON_DUMP_FALLBACK] Fallimento json.dumps su record serializzato. "
+                    f"Keys: {list(serialized.keys()) if isinstance(serialized, dict) else 'N/A'}. "
+                    f"Error: {json_err}"
+                )
+                # Ultimo fallback: str() del record
+                line = json.dumps({"_serialization_error": str(serialized)}, ensure_ascii=False) + "\n"
+
+            handle.write(line.encode("utf-8"))
+
+        except Exception as write_err:
+            logger.error(
+                f"[WRITE_HANDLE_CRITICAL] Errore durante write. Record keys: {list(transformed.keys()) if isinstance(transformed, dict) else 'N/A'}. "
+                f"Error: {write_err}",
+                exc_info=True
+            )
+            raise

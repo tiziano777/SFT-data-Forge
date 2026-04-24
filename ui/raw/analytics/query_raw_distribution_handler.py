@@ -232,14 +232,16 @@ def _render_query_interface(st, data_path: str, file_extension: str):
     
     # Parametri esecuzione
     col_exec1, col_exec2 = st.columns([3, 1])
-    
+
     with col_exec1:
+        st.info("💡 La query eseguirà su TUTTI i dati. La visualizzazione sarà troncata a 500 righe.")
         limit_results = st.number_input(
-            "Limite risultati per l'esecuzione SQL (LIMIT)", 
-            min_value=1,
-            value=st.session_state.get("limit_results_input", 50),
+            "Max righe da visualizzare:",
+            min_value=10,
+            value=st.session_state.get("limit_results_input", 500),
+            step=100,
             key="limit_results_input",
-            help="Numero massimo di righe che DuckDB leggerà ed elaborerà."
+            help="Solo per il display. La query eseguirà su TUTTI i dati."
         )
     
     def execute_query_callback():
@@ -258,15 +260,15 @@ def _execute_sql_query(st):
     """Esegue la query SQL e gestisce i risultati."""
     if not st.session_state.get('run_query', False):
         return
-        
+
     st.session_state.run_query = False
-    
+
     try:
         with duckdb.connect() as conn:
             st.info("🔄 Esecuzione query in corso...")
 
             query_base = st.session_state.last_query.strip()
-            user_limit = st.session_state.get("limit_results_input", 50)
+            user_limit = st.session_state.get("limit_results_input", 500)
             effective_limit = min(DISPLAY_LIMIT, user_limit)
 
             # Applica LIMIT se non presente
@@ -278,31 +280,24 @@ def _execute_sql_query(st):
                 query_to_execute += ";"
             else:
                 query_to_execute = f"{query_base} LIMIT {effective_limit};"
-                st.info(f"✨ Aggiunta clausola **LIMIT {effective_limit}**")
-            
+                st.info(f"✨ Aggiunta clausola **LIMIT {effective_limit}** (su max {DISPLAY_LIMIT})")
+
             # Esegui query
             print("Eseguendo query SQL:", query_to_execute)
             result = conn.execute(query_to_execute).fetchdf()
             st.session_state.executed_query = query_to_execute
-            
-            # Converti colonne object in stringhe
-            '''
-            for col in result.columns:
-                if result[col].dtype == 'object':
-                    try:
-                        result[col] = result[col].astype(str)
-                    except Exception as e:
-                        st.warning(f"⚠️ Impossibile convertire colonna '{col}' a stringa: {e}")
-            '''
-            
+
+            # Salva la query ORIGINALE per il re-fetch al salvataggio
+            st.session_state.original_query_for_save = query_base.rstrip(' \t\n\r;')
+
             st.session_state.query_result_df = result
-                       
+
     except Exception as e:
         st.error(f"❌ Errore nell'esecuzione della query: {str(e)}")
-        
+
         if 'query_result_df' in st.session_state:
             del st.session_state.query_result_df
-        
+
         # Suggerimenti per errori comuni
         if "no such file" in str(e).lower():
             st.info("💡 **Suggerimento**: Verifica il path ai file")
@@ -456,14 +451,59 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
     """
     Salva i risultati della query in file JSONL.GZ suddivisi
     in base alla dimensione in memoria e alla dimensione target per file.
+
+    Re-esegue la query con il LIMITE inserito dall'utente per il salvataggio,
+    salva localmente, poi lo persiste su disco.
     """
     TARGET_FILE_SIZE_MB = 120.0  # Dimensione massima target per file (non rigida)
     BYTES_TO_MB = 1024 * 1024
-    
+
     try:
-        # 1. Controlli Iniziali e Preparazione Cartella
+        # 1. RE-ESECUZIONE DELLA QUERY CON LIMITE UTENTE
+        # Recupera la query originale e il limite inserito
+        query_original = st.session_state.get('original_query_for_save', '')
+        user_limit = st.session_state.get("limit_results_input", 500)
+
+        logger.info(f"[_save_query_results] Parametri: user_limit={user_limit}, query_original_len={len(query_original)}")
+
+        if not query_original:
+            st.error("❌ Impossibile recuperare la query originale per il salvataggio.")
+            logger.error("[_save_query_results] Query originale non trovata in session_state")
+            return False
+
+        st.info(f"🔄 Re-esecuzione query con LIMIT {user_limit} per il salvataggio...")
+        logger.info(f"[_save_query_results] Re-esecuzione query con LIMIT {user_limit}")
+
+        with duckdb.connect() as conn:
+            logger.info("[_save_query_results] Connessione DuckDB aperta")
+
+            # Rimuovi eventuale punto e virgola finale
+            query_clean = query_original.rstrip(' \t\n\r;')
+            query_lower = query_clean.lower()
+
+            # Controlla se ha già LIMIT
+            if " limit " in query_lower:
+                # Se la query ha già limit, la usiamo così com'è
+                query_with_limit = query_clean
+                logger.info("[_save_query_results] Query contiene già LIMIT, usata così com'è")
+            else:
+                # Aggiungi il limit inserito dall'utente
+                query_with_limit = f"{query_clean} LIMIT {user_limit}"
+                logger.info(f"[_save_query_results] Aggiunto LIMIT {user_limit} alla query")
+
+            # Esegui query con il limite dell'utente
+            logger.info("[_save_query_results] Esecuzione query con limit utente")
+            print("[_save_query_results] Esecuzione query con limit utente:", query_with_limit)
+            full_result_df = conn.execute(query_with_limit + ";").fetchdf()
+            logger.info(f"[_save_query_results] Query eseguita. Righe restituite: {len(full_result_df)}")
+
+        result_df = full_result_df  # Usa il dataframe con limite utente per il salvataggio
+        logger.info(f"[_save_query_results] DataFrame assegnato. Righe: {len(result_df)}, Colonne: {len(result_df.columns)}")
+
+        # 2. Controlli Iniziali e Preparazione Cartella
         if result_df.empty:
             st.info("⚠️ DataFrame vuoto. Nessun file da salvare.")
+            logger.info("[_save_query_results] DataFrame vuoto, passaggio a creazione distribuzione")
             return _create_query_distribution(st, destination_path, False, repos)
 
         if destination_path.exists() and any(destination_path.iterdir()):
@@ -471,77 +511,94 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
             logger.error(f"[_save_query_results] Cartella esiste già: {destination_path}")
             return False
 
+        logger.info(f"[_save_query_results] Creazione cartella: {destination_path}")
         destination_path.mkdir(parents=True, exist_ok=True)
         st.info(f"📁 Creata nuova cartella: {destination_path}")
+        logger.info(f"[_save_query_results] Cartella creata con successo")
 
-        # 2. Calcolo della Suddivisione (Logica Semplificata Richiesta)
-        # Dimensione totale del DataFrame in memoria (in MB)
+        # 3. Calcolo della Suddivisione
         total_size_bytes = result_df.memory_usage(deep=True).sum()
         total_size_mb = total_size_bytes / BYTES_TO_MB
-        # Calcolo del rapporto e logica di arrotondamento
         ratio = total_size_mb / TARGET_FILE_SIZE_MB
         if ratio % 1 > 0.5:
             num_chunks = int(np.ceil(ratio))
         else:
             num_chunks = int(np.floor(ratio))
-            num_chunks = max(1, num_chunks) 
-            
+            num_chunks = max(1, num_chunks)
+
         num_records = len(result_df)
         chunk_size = int(np.ceil(num_records / num_chunks))
 
         logger.info(f"[_save_query_results] Dimensione totale (memoria): {total_size_mb:.2f} MB")
         logger.info(f"[_save_query_results] Suddivisione in {num_chunks} chunk (target {TARGET_FILE_SIZE_MB} MB), chunk_size: {chunk_size}")
-        
-        # 3. Pre-calcolo: determiniamo se la colonna _filename esiste
+
+        # 4. Pre-calcolo: determiniamo se la colonna _filename esiste
         filename_column_exists = '_filename' in result_df.columns
-        
-        # 4. Salvataggio per Chunk
+        logger.info(f"[_save_query_results] Colonna _filename esiste: {filename_column_exists}")
+
+        # 5. Salvataggio per Chunk
+        logger.info(f"[_save_query_results] INIZIO salvataggio {num_chunks} chunk")
+
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
+
         for i in range(num_chunks):
             start_idx = i * chunk_size
             end_idx = min(start_idx + chunk_size, num_records)
-            
-            if start_idx >= num_records: 
-                break 
+
+            if start_idx >= num_records:
+                break
+
+            logger.info(f"[_save_query_results] Salvataggio chunk {i+1}/{num_chunks} (righe {start_idx}-{end_idx})")
 
             # OPTIMIZATION: Estrazione diretta senza copia iniziale
             chunk_df = result_df.iloc[start_idx:end_idx]
             file_name = f"query_results_{i+1:05d}.jsonl.gz"
             output_file = destination_path / file_name
-            
-            # OPTIMIZATION: Modifica mirata del campo _filename con assign() 
-            # che è più efficiente di copiare l'intero dataframe
-            if filename_column_exists:
-                # Usiamo assign() che modifica in modo efficiente
-                chunk_df = chunk_df.assign(_filename=file_name)
-            else:
-                # Se la colonna non esiste, la creiamo
-                chunk_df = chunk_df.assign(_filename=file_name)
-            
+
+            # OPTIMIZATION: Modifica mirata del campo _filename con assign()
+            chunk_df = chunk_df.assign(_filename=file_name)
+
             status_text.text(f"Salvataggio file {i+1}/{num_chunks} ({len(chunk_df)} record)...")
 
-            with gzip.open(output_file, 'wt', encoding='utf-8') as f_gz:
-                for idx, row in chunk_df.iterrows():
-                    row_dict_clean = process_record_for_json(row.to_dict())
-                    f_gz.write(json.dumps(row_dict_clean, ensure_ascii=False) + '\n')
-            
+            try:
+                logger.info(f"[_save_query_results] Scrittura file: {output_file}")
+                with gzip.open(str(output_file), 'wt', encoding='utf-8') as f_gz:
+                    for idx, row in chunk_df.iterrows():
+                        row_dict_clean = process_record_for_json(row.to_dict())
+                        json_line = json.dumps(row_dict_clean, ensure_ascii=False)
+                        f_gz.write(json_line + '\n')
+
+                logger.info(f"[_save_query_results] File scritto con successo: {output_file}")
+            except Exception as write_error:
+                logger.error(f"[_save_query_results] ERRORE nella scrittura del file: {str(write_error)}", exc_info=True)
+                st.error(f"❌ Errore nella scrittura del file {file_name}: {str(write_error)}")
+                raise
+
             del chunk_df
             progress_bar.progress((i + 1) / num_chunks)
-        
+
         progress_bar.progress(1.0)
         status_text.empty()
-        
-        files_created = list(destination_path.glob("*.jsonl.gz"))
-        st.success(f"✅ Salvataggio completato in {len(files_created)} file!")
-        st.info(f"📊 Totale: {num_records} record(s) in {len(files_created)} file(s)")
 
-        return _create_query_distribution(st, destination_path, True, repos)
-        
+        files_created = list(destination_path.glob("*.jsonl.gz"))
+        logger.info(f"[_save_query_results] Salvataggio file completato. {len(files_created)} file creati.")
+        logger.info(f"[_save_query_results] TOTALE: {num_records} record(s) in {len(files_created)} file(s)")
+
+        logger.info(f"[_save_query_results] INIZIO creazione distribuzione con materialize=True")
+        result = _create_query_distribution(st, destination_path, True, repos)
+        logger.info(f"[_save_query_results] Creazione distribuzione completata. Result: {result}")
+
+        # Mostra messaggi SOLO dopo aver completato tutto
+        if result:
+            st.success(f"✅ Salvataggio completato in {len(files_created)} file!")
+            st.info(f"📊 Totale: {num_records} record(s) in {len(files_created)} file(s)")
+
+        return result
+
     except Exception as e:
         st.error(f"❌ Errore nel salvataggio: {str(e)}")
-        logger.error(f"[_save_query_results] Errore generale: {str(e)}")
+        logger.error(f"[_save_query_results] Errore generale: {str(e)}", exc_info=True)
         return False
 
 def _create_query_distribution(st, destination_path: Path, materialize: bool, repos: Dict) -> bool:
@@ -574,7 +631,7 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
                 derived_card=old_dataset.derived_card,
                 derived_dataset=current_dist.dataset_id, # Punta al dataset genitore
                 dataset_type=old_dataset.dataset_type,
-                globs=['*.parquet'] if materialize else [],
+                globs=['*.jsonl.gz'] if materialize else [],  # MODIFICATO: default a jsonl.gz per step1
                 description=f"Dataset derivato da query su {old_dataset.name}",
                 source=old_dataset.source,
                 version=old_dataset.version,
@@ -602,16 +659,16 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
             uri=new_dist_uri,
             tokenized_uri=None,
             dataset_id=target_dataset_id, # Punterà al nuovo dataset o al vecchio
-            glob='*.parquet',
-            format='parquet',
+            glob='*.jsonl.gz',
+            format='.jsonl.gz',
             query=_compact_sql_query(st.session_state.get('executed_query', '')),
             derived_from=current_dist.id,
             split=current_dist.split,
-            src_schema={},
+            src_schema={},  # Reset dello schema sorgente poiché è un output di query
             name=f"query__{destination_path.name}",
             description=f"Risultati query su {current_dist.name}",
             lang=current_dist.lang,
-            tags=tags + ["query"], 
+            tags=tags + ["query"],
             license=current_dist.license,
             version=current_dist.version,
             issued=datetime.now(timezone.utc),

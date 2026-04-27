@@ -1,4 +1,5 @@
 # ui/query/query_distribution_handler.py
+
 import os
 import traceback
 import gzip
@@ -566,6 +567,8 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
                 with gzip.open(str(output_file), 'wt', encoding='utf-8') as f_gz:
                     for idx, row in chunk_df.iterrows():
                         row_dict_clean = process_record_for_json(row.to_dict())
+                        if idx==0:
+                            logger.info(f"[_save_query_results] Esempio record processato per JSON: {row_dict_clean}")
                         json_line = json.dumps(row_dict_clean, ensure_ascii=False)
                         f_gz.write(json_line + '\n')
 
@@ -604,24 +607,26 @@ def _save_query_results(st: Any, result_df, destination_path: Path, repos: Dict)
 def _create_query_distribution(st, destination_path: Path, materialize: bool, repos: Dict) -> bool:
     """Crea una nuova distribuzione, gestendo la creazione di un nuovo dataset se necessario."""
     try:
+        logger.info("destination_path per distribuzione: " + str(destination_path))
         from datetime import datetime, timezone
         import copy
-        
+
         current_dist = st.session_state.current_distribution
         old_dataset = repos['dataset'].get_by_id(current_dist.dataset_id)
-        
+
         if not old_dataset:
             st.error("❌ Dataset originale non trovato nel database.")
             return False
 
         # 1. Prepariamo l'URI della nuova distribuzione
         new_dist_uri = f"{BASE_PREFIX}{to_binded_path(str(destination_path))}"
-        
+        logger.info(f"[_create_query_distribution] Nuova URI distribuzione: {new_dist_uri}")
+
         # 2. Logica Critica: Verifica appartenenza gerarchica
         # Se l'URI del dataset NON è contenuto nell'URI della nuova distribuzione
         if old_dataset.uri not in new_dist_uri:
             logger.info("⚠️ Nuova distribuzione fuori dal path del dataset originale. Creazione nuovo Dataset.")
-            
+
             # Creiamo il nuovo dataset ereditando i campi
             new_dataset = Dataset(
                 id=None, # Sarà generato dal DB
@@ -640,11 +645,22 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
                 issued=datetime.now(timezone.utc),
                 modified=datetime.now(timezone.utc)
             )
-            
-            # Inseriamo il nuovo dataset per ottenere l'ID
-            new_dataset_obj = repos['dataset'].insert(new_dataset)
-            target_dataset_id = new_dataset_obj.id
-            logger.info(f"✅ Creato nuovo Dataset ereditato con ID: {target_dataset_id}")
+
+            try:
+                # Inseriamo il nuovo dataset per ottenere l'ID
+                new_dataset_obj = repos['dataset'].insert(new_dataset)
+                target_dataset_id = new_dataset_obj.id
+                logger.info(f"✅ Creato nuovo Dataset ereditato con ID: {target_dataset_id}")
+            except Exception as ds_insert_err:
+                try:
+                    # Upsert del nuovo dataset per ottenere l'ID (permette correzioni iterative)
+                    new_dataset_obj = repos['dataset'].upsert_by_uri(new_dataset)
+                    target_dataset_id = new_dataset_obj.id
+                    logger.info(f"✅ Upsert Dataset ereditato completato con ID: {target_dataset_id}")
+                except Exception as ds_upsert_err:
+                    st.error(f"❌ Errore nella creazione del nuovo dataset: {str(ds_upsert_err)}")
+                    logger.error(f"[_create_query_distribution] ERRORE nella creazione/upsert del nuovo dataset: {str(ds_upsert_err)}", exc_info=True)
+                    return False
         else:
             # Caso standard: la distribuzione è una sottocartella del dataset esistente
             target_dataset_id = old_dataset.id
@@ -654,6 +670,21 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
         if not isinstance(tags, list):
             tags = list(tags) if tags else []
 
+        # Costruisci la query corretta usando la query originale e il limite utente
+        query_original = st.session_state.get('original_query_for_save', '')
+        user_limit = st.session_state.get("limit_results_input", 500)
+
+        if query_original:
+            query_clean = query_original.rstrip(' \t\n\r;')
+            query_lower = query_clean.lower()
+
+            if " limit " in query_lower:
+                correct_query = query_clean
+            else:
+                correct_query = f"{query_clean} LIMIT {user_limit}"
+        else:
+            correct_query = st.session_state.get('executed_query', '')
+
         new_distribution = Distribution(
             id=None,
             uri=new_dist_uri,
@@ -661,7 +692,7 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
             dataset_id=target_dataset_id, # Punterà al nuovo dataset o al vecchio
             glob='*.jsonl.gz',
             format='.jsonl.gz',
-            query=_compact_sql_query(st.session_state.get('executed_query', '')),
+            query=_compact_sql_query(correct_query),
             derived_from=current_dist.id,
             split=current_dist.split,
             src_schema={},  # Reset dello schema sorgente poiché è un output di query
@@ -677,14 +708,19 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
             step=1
         )
 
-        dist_result = repos['distribution'].insert(new_distribution)
-
-        # 4. Aggiornamento globs se materializzato
-        if materialize and dist_result:
-            target_ds = repos['dataset'].get_by_id(target_dataset_id)
-            if target_ds:
-                target_ds.globs = generate_dataset_globs(target_ds.uri)
-                repos['dataset'].update(target_ds)
+        
+        # Upsert della distribuzione (sostituisce se esiste, crea se non esiste)
+        try:
+            dist_result = repos['distribution'].insert(new_distribution)
+            logger.info(f"[_create_query_distribution] Creato nuova distribuzione con ID: {dist_result.id}")
+        except Exception as insert_err:
+            try:
+                dist_result = repos['distribution'].upsert_by_uri(new_distribution)
+                logger.info(f"[_create_query_distribution] Upsert distribuzione completato")
+            except Exception as upsert_err:
+                st.error(f"❌ Errore nella creazione/upsert della distribuzione: {str(upsert_err)}")
+                logger.error(f"[_create_query_distribution] ERRORE nella creazione/upsert della distribuzione: {str(upsert_err)}", exc_info=True)
+                return False
 
         if dist_result:
             st.success(f"✅ Distribuzione registrata con successo (ID: {dist_result.id})")

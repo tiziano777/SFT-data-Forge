@@ -76,17 +76,50 @@ def load_dataset_samples(data_folder, k=50, max_len=1_000_000):
         print(f"La cartella dei dati '{data_folder}' non esiste.")
         return None
 
-    supported_extensions = ['json', '.jsonl', '.csv', '.gz', '.parquet', '.jsonl.gz', '.tsv', '.tsv.gz', '.warc', '.warc.gz']
-    data_files = [f for f in os.listdir(data_folder) if any(f.endswith(ext) for ext in supported_extensions)]
-    
-    if not data_files:
+    # Cerca file nella cartella; non fidarsi solo dell'estensione, useremo magic bytes per determinare il formato
+    entries = os.listdir(data_folder)
+    if not entries:
+        print(f"Nessuna entry nella cartella dei dati '{data_folder}'.")
+        return []
+
+    # Preferisci file con estensioni comuni ma fallback alla prima entry rilevabile
+    candidates = [f for f in entries if f.lower().endswith(('.jsonl', '.json', '.jsonl.gz', '.gz', '.parquet', '.csv', '.tsv', '.warc'))]
+    if not candidates:
+        candidates = entries
+
+    file_path = None
+    for fname in candidates:
+        p = os.path.join(data_folder, fname)
+        if os.path.isfile(p):
+            file_path = p
+            break
+
+    if not file_path:
         print(f"Nessun file supportato trovato in '{data_folder}'.")
         return []
-        
-    file_path = os.path.join(data_folder, data_files[0])
     
     try:
-        if file_path.endswith('.json'):
+        # Heuristic: detect file type by reading magic bytes when possible
+        def _peek_bytes(path, n=8):
+            try:
+                with open(path, 'rb') as fh:
+                    return fh.read(n)
+            except Exception:
+                return b''
+
+        head = _peek_bytes(file_path, 4)
+
+        # parquet files start with b'PAR1'
+        if head == b'PAR1' or file_path.endswith('.parquet'):
+            try:
+                table = pq.read_table(file_path, columns=None)
+                df = table.to_pandas().head(k)
+                samples = df.to_dict('records')
+            except Exception as e:
+                print(f"Errore Parquet: {e}")
+                return None
+
+        elif file_path.endswith('.json'):
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 if isinstance(data, list):
@@ -99,11 +132,53 @@ def load_dataset_samples(data_folder, k=50, max_len=1_000_000):
 
         elif file_path.endswith('.jsonl'):
             with open(file_path, 'r', encoding='utf-8') as f:
-                samples = [json.loads(line) for line in f.readlines()[:k]]
+                samples = []
+                for i, line in enumerate(f):
+                    if i >= k:
+                        break
+                    if line.strip():
+                        samples.append(json.loads(line))
         
         elif file_path.endswith('.jsonl.gz') or file_path.endswith('.gz'):
-            with gzip.open(file_path, 'rt', encoding='utf-8') as f:
-                samples = [json.loads(line) for line in f.readlines()[:k]]
+            # For .gz files, don't assume inner format solely from extension; peek into decompressed stream
+            try:
+                with gzip.open(file_path, 'rt', encoding='utf-8') as f:
+                    samples = []
+                    for i, line in enumerate(f):
+                        if i >= k:
+                            break
+                        if line.strip():
+                            try:
+                                samples.append(json.loads(line))
+                            except Exception:
+                                # not JSONL lines; skip or break
+                                pass
+                    if not samples:
+                        # Maybe it's a gzipped parquet or csv -> try parquet load
+                        try:
+                            with gzip.open(file_path, 'rb') as fb:
+                                # write to a temp file in memory is expensive; try pyarrow from buffer if available
+                                import io
+                                buf = fb.read()
+                                try:
+                                    import pyarrow as pa
+                                    import pyarrow.parquet as pq_mod
+                                    tbl = pq_mod.read_table(pa.BufferReader(buf))
+                                    df = tbl.to_pandas().head(k)
+                                    samples = df.to_dict('records')
+                                except Exception:
+                                    # fallback try pandas csv
+                                    try:
+                                        import pandas as pd
+                                        df = pd.read_csv(io.BytesIO(buf), sep='\n', nrows=k, header=None)
+                                        samples = df[0].apply(lambda x: json.loads(x) if isinstance(x, str) else x).tolist()
+                                    except Exception:
+                                        samples = []
+                        except Exception:
+                            samples = []
+            except Exception as e:
+                print(f"Errore nella lettura gzip: {e}")
+                return None
         
         elif file_path.endswith('.csv'):
             df = pd.read_csv(file_path, nrows=k)

@@ -11,3 +11,5 @@ __pycache__/
 docker/dev/.env.dev
 docker/prod/.env.prod
 
+*.bin
+**/models/lid.176.bin

@@ -24,6 +24,7 @@ def _reset_udf_state(st):
     st.session_state.udf_name = ""
     st.session_state.udf_description = ""
     st.session_state.udf_example_params = []
+    st.session_state.udf_example_params_initialized = False
     st.session_state.udf_function_def = FN_PLACEHOLDER
     st.session_state.udf_validation_result = None
     st.session_state.udf_execution_results = None
@@ -138,20 +139,20 @@ def _manage_example_params_advanced(st, name: str):
     """Gestisce l'inserimento di parametri con tipi complessi (str, int, float, list, dict)"""
     
     st.markdown("**Aggiungi nuovo parametro:**")
-    
-    if  not st.session_state.udf_example_params:
-        st.session_state.udf_example_params.append({
-            'type': 'str',
-            'value': name,
-            'display': _format_param_display('str', name)
-        })
-    if st.session_state.udf_example_params:
-        if st.session_state.udf_example_params[0]['value'] != name:
-            st.session_state.udf_example_params.insert(0,{
-                'type': 'str',
-                'value': name,
-                'display': _format_param_display('str', name)
-            })
+    # Initialize example params only once. Do not auto-add if name is empty
+    if 'udf_example_params_initialized' not in st.session_state:
+        st.session_state.udf_example_params_initialized = False
+
+    if not st.session_state.udf_example_params_initialized:
+        if name and name.strip():
+            if not st.session_state.udf_example_params:
+                st.session_state.udf_example_params.append({
+                    'type': 'str',
+                    'value': name,
+                    'display': _format_param_display('str', name)
+                })
+        # Mark as initialized so user deletions won't be auto-recreated
+        st.session_state.udf_example_params_initialized = True
 
 
     col1, col2, col3 = st.columns([2, 3, 1])
@@ -663,6 +664,8 @@ def _load_udf_for_edit(st, udf: Udf):
                 pass
     
     st.session_state.udf_example_params = example_params
+    # When loading an existing UDF, consider params initialized to avoid overwriting
+    st.session_state.udf_example_params_initialized = True
     
     # Reset altri stati
     st.session_state.udf_validation_result = None

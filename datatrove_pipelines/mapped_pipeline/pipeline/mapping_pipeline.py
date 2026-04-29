@@ -27,7 +27,6 @@ def run_mapping_pipeline():
     processed_distribution_path = processed_dataset_path + "ARC-Challenge/en/"
     mapped_dataset_path = MAPPED_DATA_DIR + "/velvet_v1/allenai/"
     low_level_stats_path= stats_path + LOW_LEVEL_STATS_EXTENSION
-    chat_stats_path= stats_path + CHAT_TEMPLATE_STATS_EXTENSION
 
     input_path= processed_dataset_path
     output_path= mapped_dataset_path
@@ -184,7 +183,7 @@ def run_mapping_pipeline():
     print(f"Input path: {input_path}")
     print(f"Output path: {output_path}")
     print(f"Low level stats path: {low_level_stats_path}")
-    print(f"Chat stats path: {chat_stats_path}")
+
 
     reader= UnifiedReader(
         data_folder=processed_distribution_path,
@@ -204,16 +203,14 @@ def run_mapping_pipeline():
         src_schema=src_schema
     )
 
-    chat_stats = ChatTemplateStats(
-        output_folder=chat_stats_path,
-    )
+
 
     writer= CustomJsonlWriter(
         base_input_path=input_path,
         base_output_path=output_path,
     )
 
-    pipeline= [reader,low_level_stats,mapper,chat_stats,writer]
+    pipeline= [reader,low_level_stats,mapper,writer]
     
     pipe = LocalPipelineExecutor(
         pipeline=pipeline,

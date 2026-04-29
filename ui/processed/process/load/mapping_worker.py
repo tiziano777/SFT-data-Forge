@@ -10,7 +10,7 @@ from datatrove_pipelines.mapped_pipeline.reader.unified_reader import UnifiedRea
 from datatrove_pipelines.mapped_pipeline.extractor.map import MapperExtractor
 from datatrove_pipelines.mapped_pipeline.writer.unified_writer import UnifiedWriter
 from datatrove_pipelines.mapped_pipeline.stats.low_level_stats import DocStats
-from datatrove_pipelines.mapped_pipeline.stats.chat_template_stats import ChatTemplateStats
+
 
 def run_mapping_pipeline(args):
     try:
@@ -23,12 +23,10 @@ def run_mapping_pipeline(args):
         base_output_root = args.get('output_dataset_path')
         
         low_level_stats_path = args['low_level_stats_path']
-        chat_stats_path = args['chat_stats_path']
         mapping = args['mapping']
         dst_schema = args['dst_schema']
         src_schema = args['src_schema']
         glob_pattern = args['glob_pattern']
-        perform_chat_stats = args['perform_chat_stats']
         output_format = args.get("output_format", "jsonl.gz")
         
         # 🔴 MANCA LA VALIDAZIONE! Aggiungiamola:
@@ -39,7 +37,6 @@ def run_mapping_pipeline(args):
         print(f"   output_dist_path: {output_dist_path}")
         print(f"   base_output_root: {base_output_root}")
         print(f"   low_level_stats_path: {low_level_stats_path}")
-        print(f"   chat_stats_path: {chat_stats_path}")
         
         # VALIDAZIONE CRITICA - Verifica che i path esistano
         if not os.path.exists(input_dist_path):
@@ -73,10 +70,7 @@ def run_mapping_pipeline(args):
             os.makedirs(low_level_stats_path, exist_ok=True)
             print(f"✅ Directory stats creata/verificata: {low_level_stats_path}")
             
-        if perform_chat_stats and chat_stats_path:
-            os.makedirs(chat_stats_path, exist_ok=True)
-            print(f"✅ Directory chat stats creata/verificata: {chat_stats_path}")
-        
+
         print(f"🎯 Writer Base Input (Dataset Root): {base_input_root}")
         print(f"🎯 Writer Base Output (Dataset Root): {base_output_root}")
         
@@ -111,9 +105,6 @@ def run_mapping_pipeline(args):
         pipeline = [reader]
         pipeline.append(DocStats(output_folder=low_level_stats_path))
         pipeline.append(mapper)
-        
-        if perform_chat_stats and chat_stats_path:
-            pipeline.append(ChatTemplateStats(output_folder=chat_stats_path))
         
         pipeline.append(writer)
         

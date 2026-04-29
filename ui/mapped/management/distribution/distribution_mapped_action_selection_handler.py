@@ -144,26 +144,7 @@ def stats_exists(distribution_uri: str) -> bool:
     files = [f for f in os.listdir(to_internal_path(target_dir)) if f.endswith('.parquet')]
     return len(files) > 0
 
-def chat_stats_exists(distribution_uri: str, sample: dict) -> bool:
-    """Verifica se esistono file di statistiche chat nella cartella mapped."""
-    if not sample or 'messages' not in sample:
-        return False
 
-    local_path = distribution_uri.replace(BASE_PREFIX, '').replace(BINDED_MAPPED_DATA_DIR, BINDED_STATS_DATA_DIR)
-    target_dir = local_path + CHAT_TEMPLATE_STATS_EXTENSION
-    
-    if not os.path.exists(to_internal_path(target_dir)):
-        logger.debug(f"Chat stats dir not found: {target_dir}")
-        return False
-
-    files = [f for f in os.listdir(to_internal_path(target_dir)) if f.endswith('.parquet')]
-    return len(files) > 0
-
-def enable_advanced_query_current_distribution(distribution: Distribution, sample: dict) -> bool:
-    """Abilita il bottone di query solo se ENTRAMBE le stats sono presenti localmente."""
-    has_chat = chat_stats_exists(distribution.uri, sample)
-    has_low = stats_exists(distribution.uri)
-    return has_chat and has_low
 
 def _render_main_action_buttons(st_app, distribution: Distribution):
     """Renderizza i bottoni principali per le azioni sulla distribution."""
@@ -174,7 +155,7 @@ def _render_main_action_buttons(st_app, distribution: Distribution):
     if is_metadata_missing:
         st_app.warning("⚠️ Lingua o Tipo non censiti. Modifica i metadati per sbloccare le azioni.")
     
-    col1, col2, col3, col4, col5, col6 = st_app.columns(6)
+    col1, col2, col3, col4 = st_app.columns(4)
     
     with col1:
         if st_app.button(
@@ -194,19 +175,9 @@ def _render_main_action_buttons(st_app, distribution: Distribution):
         ):
             st_app.session_state.current_stage = "mapped_query_current_distribution"
             st_app.rerun()
+        
             
     with col3:
-        already_has_chat = chat_stats_exists(distribution.uri, current_sample)
-        if st_app.button(
-            "📊 Estrai Chat Stats",
-            use_container_width=True,
-            disabled=is_metadata_missing or already_has_chat,
-            key=f"extract_chat_stats_{distribution.id}" 
-        ):
-            st_app.session_state.current_stage = "mapped_run_chat_template_stats_extraction"
-            st_app.rerun()
-            
-    with col4:
         already_has_low = stats_exists(distribution.uri)
         if st_app.button(
             "📊 Estrai Low Stats",
@@ -217,7 +188,7 @@ def _render_main_action_buttons(st_app, distribution: Distribution):
             st_app.session_state.current_stage = "mapped_run_low_level_stats_extraction"
             st_app.rerun()
 
-    with col5:
+    with col4:
         has_low = stats_exists(distribution.uri)
         if st_app.button(
             "📊 Advanced Query",
@@ -228,16 +199,6 @@ def _render_main_action_buttons(st_app, distribution: Distribution):
             st_app.session_state.current_stage = "mapped_query_low_level_stats_current_distribution"
             st_app.rerun()
 
-    with col6:
-        adv_query_enabled = enable_advanced_query_current_distribution(distribution, current_sample)
-        if st_app.button(
-            "🔍📊 Advanced QA Query",
-            use_container_width=True,
-            disabled=is_metadata_missing or not adv_query_enabled,
-            key=f"advanced_query_{distribution.id}"
-        ):
-            st_app.session_state.current_stage = "mapped_query_advanced_current_distribution"
-            st_app.rerun()
 
 def _render_navigation_buttons(st_app):
     """Renderizza i bottoni di navigazione."""

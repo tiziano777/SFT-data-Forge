@@ -88,11 +88,28 @@ def _get_distribution_paths(distribution: Distribution) -> tuple:
 
 def _extract_stats_columns(stats_path: str) -> List[str]:
     try:
-        stats_files = list(Path(stats_path).glob('*.parquet'))
-        if not stats_files:
-            logger.warning(f"No parquet files found in {stats_path}")
+        p = Path(stats_path)
+        if not p.exists():
+            logger.error(f"Stats path does not exist: {stats_path}")
             return []
-        table = pq.read_table(stats_files[0])
+
+        # Prefer direct parquet files, but also accept variants like .parquet.gz
+        # and nested parquet files under subdirectories.
+        parquet_files = [f for f in p.iterdir() if f.is_file() and '.parquet' in f.name.lower()]
+        if not parquet_files:
+            # Try recursive search
+            parquet_files = [f for f in p.rglob('*') if f.is_file() and '.parquet' in f.name.lower()]
+
+        if not parquet_files:
+            # Nothing matched — log the directory contents for debugging
+            try:
+                entries = [e.name for e in p.iterdir()]
+            except Exception:
+                entries = []
+            logger.warning(f"No parquet files found in {stats_path}. Directory entries: {entries}")
+            return []
+
+        table = pq.read_table(parquet_files[0])
         return [col for col in table.column_names if col != 'id']
     except Exception as e:
         logger.error(f"Error extracting stats columns: {e}")

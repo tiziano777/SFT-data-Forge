@@ -24,7 +24,7 @@ $$ LANGUAGE plpgsql;
 
 -- Trigger per la tabella dataset
 DROP TRIGGER IF EXISTS trg_set_step_dataset ON dataset;
-CREATE TRIGGER a_trg_set_step_dataset 
+CREATE TRIGGER trg_set_step_dataset 
     BEFORE INSERT OR UPDATE ON dataset 
     FOR EACH ROW EXECUTE FUNCTION fn_update_step_from_uri();
 
@@ -518,7 +518,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_validate_dataset_steps ON dataset;
-CREATE TRIGGER b_trg_validate_dataset_steps -- 'b_' viene dopo 'a_'
+CREATE TRIGGER trg_validate_dataset_steps 
     BEFORE INSERT OR UPDATE ON dataset 
     FOR EACH ROW EXECUTE FUNCTION trg_dataset_lineage_check();
     

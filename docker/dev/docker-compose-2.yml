@@ -1,0 +1,60 @@
+services:
+  dashboard:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    image: sft-dataforge-dev:latest
+    container_name: sft-dataforge-dev
+    restart: always
+    env_file:
+      - .env.dev
+    ports:
+      - "8501:8501"
+    environment:
+      - ENV=dev
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}?schema=${DB_SCHEMA}
+    volumes:
+      - ../../logs:/app/logs
+      - ../../nfs:/app/nfs
+      - ../../config:/app/config
+    depends_on:
+      - postgres
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    shm_size: '2gb'
+    networks:
+      - sft_dataforge_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  postgres:
+    image: postgres:17
+    container_name: sft-dataforge-postgres
+    restart: always
+    env_file:
+      - .env.dev
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sft_dataforge_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  sft_dataforge_network:
+    driver: bridge

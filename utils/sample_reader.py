@@ -1,7 +1,6 @@
 import os
 import json
 import gzip
-import pandas as pd
 import pyarrow.parquet as pq
 import numpy as np
 
@@ -72,6 +71,8 @@ def load_dataset_samples(data_folder, k=50, max_len=1_000_000):
         list: Una lista di dizionari JSON-safe che rappresentano i campioni,
               o None se non vengono trovati file.
     """
+    import pandas as pd
+    
     if not os.path.isdir(data_folder):
         print(f"La cartella dei dati '{data_folder}' non esiste.")
         return None
@@ -183,7 +184,7 @@ def load_dataset_samples(data_folder, k=50, max_len=1_000_000):
         elif file_path.endswith('.csv'):
             df = pd.read_csv(file_path, nrows=k)
             samples = df.to_dict('records')
-        
+
         elif file_path.endswith('.parquet'):
             table = pq.read_table(file_path, columns=None)
             df = table.to_pandas().head(k)

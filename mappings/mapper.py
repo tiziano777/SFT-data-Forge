@@ -8,6 +8,10 @@ from . import transform_functions
 from db.impl.postgres.loader.postgres_db_loader import get_db_manager
 from data_class.repository.table.udf_repository import UdfRepository
 
+import logging
+logger = logging.getLogger(__name__)
+#logger.setLevel(logging.DEBUG)  # Imposta il livello di log su DEBUG per vedere i messaggi di debug
+
 # Definizione tipi
 MappingSpec = Dict[str, List[Any]]
 JsonDocument = Dict[str, Any]
@@ -461,7 +465,7 @@ class Mapper:
         op_spec = operation[0]  # Nome della funzione
         op_args = operation[1:] if len(operation) > 1 else []  # Argomenti della funzione
 
-        #print(f"DEBUG _process_operation: {op_spec} with args: {op_args}")
+        logger.info(f"DEBUG _process_operation: {op_spec} with args: {op_args}")
 
         # Caso: funzione registrata
         if op_spec in self._function_registry:
@@ -472,7 +476,7 @@ class Mapper:
                 resolved_arg = self._resolve_argument(arg)
                 resolved_args.append(resolved_arg)
 
-            #print(f"DEBUG: Calling {op_spec} with resolved args: {resolved_args} (types: {[type(arg) for arg in resolved_args]})")
+            logger.info(f"DEBUG: Calling {op_spec} with resolved args: {resolved_args} (types: {[type(arg) for arg in resolved_args]})")
 
             # Esecuzione della Funzione - SEMPRE con op_spec come primo argomento
             try:
@@ -483,6 +487,7 @@ class Mapper:
                 # La funzione di trasformazione dovrebbe gestire liste di valori
                 transformed_value = func(op_spec, *resolved_args)
                 
+                # Normalizziamo i casi in cui la funzione ritorna None: restituiamo []
                 if transformed_value is None:
                     return []
                 elif isinstance(transformed_value, list):
@@ -493,31 +498,30 @@ class Mapper:
 
             except Exception as e:
                 error_msg = f"Errore di esecuzione funzione '{op_spec}' con argomenti {op_args}: {e}"
-                #print(error_msg)
                 self.errors.append(error_msg)
+                # Se una UDF fallisce, restituiamo una lista vuota come fallback
                 return []
 
         # Caso: semplice path sorgente (nessuna funzione) - es: ["field_name"]
         elif isinstance(op_spec, str) and self._is_source_path(op_spec):
             real_src_values = self._get_values_from_path(self._current_src_doc, op_spec)
-            #print(f"Simple path resolution: {op_spec} -> {real_src_values}")
+            logger.info(f"Simple path resolution: {op_spec} -> {real_src_values}")
             return real_src_values
 
         # Caso: valore fisso diretto - es: ["fixed_value"]
         elif isinstance(op_spec, str):
-            #print(f"Fixed value: {op_spec}")
+            logger.info(f"Fixed value: {op_spec}")
             return [op_spec]
 
         else:
-            #print(f"Fixed non-string value: {op_spec}")
+            logger.info(f"Fixed non-string value: {op_spec}")
             return [op_spec]
 
     def _process_mapping_entry(self, dst_path: str, operation: List[Any], dst_doc: JsonDocument):
         """Elabora una singola entry di mapping."""
-        #print(f"Processing mapping entry: {dst_path} -> {operation}")
-        
+        logger.info(f"Processing mapping entry: {dst_path} -> {operation}")
         transformed_values = self._process_operation(operation)
-        #print(f"Transformed values for {dst_path}: {transformed_values}")
+        logger.info(f"Transformed values for {dst_path}: {transformed_values}")
 
         if '[]' in dst_path:
             try:
@@ -574,10 +578,10 @@ class Mapper:
         """
         Applica l'intero mapping con validazione.
         """
-        #print("Applying mapping to  {} ...".format(src_doc))
+        logger.info("Applying mapping to  {} ...".format(src_doc))
         self.errors = []
         
-        #print(f"Applying mapping to source document: {src_doc}")
+        logger.info(f"Applying mapping to source document: {src_doc}")
         
         # Validazione Sorgente
         '''
@@ -588,23 +592,23 @@ class Mapper:
         self._current_src_doc = src_doc 
 
         # Applicazione del Mapping
-        #print("Starting mapping process...")
+        logger.info("Starting mapping process...")
         for dst_path, operation in self.mapping_spec.items():
             try:
-                #print(f"Mapping: {dst_path} <- {operation}")
+                logger.info(f"Mapping: {dst_path} <- {operation}")
                 self._process_mapping_entry(dst_path, operation, dst_doc)
-                #print(f"After mapping {dst_path}, document: {dst_doc}")
+                logger.info(f"After mapping {dst_path}, document: {dst_doc}")
             except Exception as e:
                 error_message = f"Errore di Mapping per '{dst_path}': {e} (Operazione: {operation})"
-                #print(error_message)
+                logger.error(error_message)
                 self.errors.append(error_message)
 
         self._current_src_doc = None
         
         # Validazione Destinazione
         is_destination_valid = self.validate_destination(dst_doc)
-        #print(f"Destination validation: {'PASS' if is_destination_valid else 'FAIL'}")
-        #print(f"Final document: {dst_doc}")
+        logger.info(f"Destination validation: {'PASS' if is_destination_valid else 'FAIL'}")
+        logger.info(f"Final document: {dst_doc}")
         
         #success = is_source_valid and is_destination_valid and not self.errors
         success = not self.errors and is_destination_valid

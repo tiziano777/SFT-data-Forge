@@ -29,18 +29,10 @@ BINDED_STATS_DATA_DIR = os.getenv("BINDED_STATS_DATA_DIR")
 MAPPED_DATA_DIR = os.getenv("MAPPED_DATA_DIR")
 PROCESSED_DATA_DIR = os.getenv("PROCESSED_DATA_DIR")
 STATS_DATA_DIR = os.getenv("STATS_DATA_DIR")
-CHAT_TEMPLATE_STATS_EXTENSION = os.getenv("CHAT_TEMPLATE_STATS_EXTENSION")
 LOW_LEVEL_STATS_EXTENSION = os.getenv("LOW_LEVEL_STATS_EXTENSION")
 
 from config.state_vars import distribution_keys
 
-def chat_stats_exists(distribution_uri: str) -> bool:
-    """True se le statistiche sono valorizzate (non vuoto)."""
-    distribution_path_stats_dir = distribution_uri.replace(BASE_PREFIX, '').replace(BINDED_PROCESSED_DATA_DIR, BINDED_STATS_DATA_DIR)
-    distribution_path_stats_file = distribution_path_stats_dir + CHAT_TEMPLATE_STATS_EXTENSION
-    if os.path.exists(distribution_path_stats_file):
-        return True
-    return False
 
 def stats_exists(distribution_path: str) -> bool:
     """True se le statistiche sono valorizzate (non vuoto)."""
@@ -75,13 +67,13 @@ def show_parallel_mapping(st):
         STATS_DATA_DIR      # /app/nfs/stats-data
     )
     low_level_stats_path_internal = stats_base_path_internal + LOW_LEVEL_STATS_EXTENSION
-    chat_stats_path_internal = stats_base_path_internal + CHAT_TEMPLATE_STATS_EXTENSION
+
 
     # Converti in binded SOLO per visualizzazione e DB
     output_distribution_path_binded = to_binded_path(output_distribution_path_internal)
     output_dataset_path_binded = to_binded_path(output_dataset_path_internal)
     low_level_stats_path_binded = to_binded_path(low_level_stats_path_internal)
-    chat_stats_path_binded = to_binded_path(chat_stats_path_internal)
+    
 
     # Visualizzazione (sempre binded)
     st.write(f"**Percorso di input:** `{to_binded_path(input_distribution_path)}`")
@@ -89,7 +81,6 @@ def show_parallel_mapping(st):
     st.write(f"**Percorso di output distribuzione:** `{output_distribution_path_binded}`")
     st.write(f"**Percorso di output dataset:** `{output_dataset_path_binded}`")
     st.write(f"**Percorso di output statistiche di basso livello:** `{low_level_stats_path_binded}`")
-    st.write(f"**Percorso di output statistiche template chat:** `{chat_stats_path_binded}`")
     st.write("")
     st.write("---")
 
@@ -124,10 +115,6 @@ def show_parallel_mapping(st):
     dst_schema = schema_template_repo.get_by_id(mapping_dict.schema_template_id).schema
     mapping = mapping_dict.mapping
 
-    if "messages" in dst_schema['properties'].keys():
-        perform_chat_stats = st.checkbox("📦 Calcola anche le stats del chat template (opzionale)")
-    else:
-        perform_chat_stats = False
 
     # Bottone per avviare la pipeline ETL
     output_format = st.selectbox(
@@ -147,20 +134,16 @@ def show_parallel_mapping(st):
             "input_dataset_path": input_dataset_path,  # già in formato interno
             "output_dataset_path": output_dataset_path_internal,
             "low_level_stats_path": low_level_stats_path_internal,
-            "chat_stats_path": chat_stats_path_internal if perform_chat_stats else None,
             "mapping": mapping,
             "dst_schema": dst_schema,
             "src_schema": distribution.src_schema,
             "glob_pattern": st.session_state.current_distribution.glob,
-            "perform_chat_stats": perform_chat_stats,
             "output_format": output_format,
         }
 
         try:
             # Creazione directory (usando path interni)
             os.makedirs(low_level_stats_path_internal, exist_ok=True)
-            if perform_chat_stats:
-                os.makedirs(chat_stats_path_internal, exist_ok=True)
             os.makedirs(output_distribution_path_internal, exist_ok=True)
 
             worker_script = os.path.join(os.path.dirname(__file__), "mapping_worker.py")

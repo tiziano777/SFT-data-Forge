@@ -13,7 +13,6 @@ try:
     from datatrove_pipelines.mapped_pipeline.extractor.map import MapperExtractor
     from datatrove_pipelines.mapped_pipeline.writer.writer import CustomJsonlWriter
     from datatrove_pipelines.mapped_pipeline.stats.low_level_stats import DocStats
-    from datatrove_pipelines.mapped_pipeline.stats.chat_template_stats import ChatTemplateStats
 except ImportError as e:
     print(f"❌ Errore: Dipendenze mancanti o cartella 'datatrove_pipelines' non trovata.\n{e}")
     sys.exit(1)
@@ -31,11 +30,9 @@ USER_CONFIG = {
     "output_distribution_path": "/path/to/local/mapped-data/dataset_name/subset_it",
     
     "low_level_stats_path": "/path/to/local/stats-data/low_level",
-    "chat_stats_path": "/path/to/local/stats-data/chat_stats",
-    
+
     # Parametri ETL
     "glob_pattern": "*.jsonl.gz",
-    "perform_chat_stats": True,
     
     # Definizione del mapping (Lo schema che l'utente vuole testare)
     "src_schema": {}, # Opzionale, schema sorgente
@@ -68,9 +65,7 @@ def run_mapping_standalone(config):
             config['low_level_stats_path'],
             config['output_distribution_path']
         ]
-        if config['perform_chat_stats']:
-            paths_to_check.append(config['chat_stats_path'])
-            
+
         for p in paths_to_check:
             os.makedirs(p, exist_ok=True)
             print(f"✅ Directory verificata: {p}")
@@ -106,11 +101,7 @@ def run_mapping_standalone(config):
             writer
         ]
         
-        # Aggiunta opzionale Chat Stats
-        if config['perform_chat_stats'] and "messages" in config['dst_schema']['properties']:
-            # Inseriamo le chat stats prima del writer ma dopo il mapper
-            pipeline.insert(-1, ChatTemplateStats(output_folder=config['chat_stats_path']))
-            print("📦 Chat Template Stats abilitate.")
+
 
         # 6. Esecuzione Parallela
         n_workers = max(1, int(multiprocessing.cpu_count() * 0.85))
@@ -146,8 +137,7 @@ def generate_db_summary(config):
         "step": 3,
         "derived_from": "original_distribution_id",
         "stats_files": {
-            "low_level": config['low_level_stats_path'],
-            "chat": config['chat_stats_path'] if config['perform_chat_stats'] else None
+            "low_level": config['low_level_stats_path']
         }
     }
     print("\nPROSPETTO PER DATABASE (MOCK):")

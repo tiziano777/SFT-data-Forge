@@ -471,10 +471,16 @@ class Mapper:
         if op_spec in self._function_registry:
             func = self._function_registry[op_spec]
             resolved_args = []
-            
+
             for arg in op_args:
                 resolved_arg = self._resolve_argument(arg)
-                resolved_args.append(resolved_arg)
+                # Unwrap single-element result sets from path resolution
+                # e.g. [["chunk1","chunk2"]] -> ["chunk1","chunk2"]
+                # e.g. ["some string"] -> "some string"
+                if isinstance(resolved_arg, list) and len(resolved_arg) == 1:
+                    resolved_args.append(resolved_arg[0])
+                else:
+                    resolved_args.append(resolved_arg)
 
             logger.info(f"DEBUG: Calling {op_spec} with resolved args: {resolved_args} (types: {[type(arg) for arg in resolved_args]})")
 

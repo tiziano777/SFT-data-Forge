@@ -9,10 +9,9 @@ MappingSpec = Dict[str, List[Any]]
 
 import os
 
-
-MAPPED_DATA_DIR= os.getenv("MAPPED_DATA_DIR")
-STATS_DATA_DIR= os.getenv("STATS_DATA_DIR")
-CHAT_TEMPLATE_STATS_EXTENSION= os.getenv("CHAT_TEMPLATE_STATS_EXTENSION")
+MAPPED_DATA_DIR = os.getenv("MAPPED_DATA_DIR")
+STATS_DATA_DIR = os.getenv("STATS_DATA_DIR")
+CHAT_TEMPLATE_STATS_EXTENSION = os.getenv("CHAT_TEMPLATE_STATS_EXTENSION")
 
 def run_low_level_stats_pipeline():
 

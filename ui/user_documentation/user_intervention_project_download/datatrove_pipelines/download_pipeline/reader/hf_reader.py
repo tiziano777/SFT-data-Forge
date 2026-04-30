@@ -6,7 +6,11 @@ import copy
 
 from datatrove.data import Document, DocumentsPipeline
 from datatrove.pipeline.readers.huggingface import HuggingFaceDatasetReader
+from ui.dataset_card.dataset_download.processed_datatrove_pipe.preprocessed_downloader import HF_ACCESS_TOKEN
 
+import os
+import dotenv
+dotenv.load_dotenv() 
 
 class CustomHuggingFaceReader(HuggingFaceDatasetReader):
     """
@@ -140,7 +144,10 @@ class CustomHuggingFaceReader(HuggingFaceDatasetReader):
                 logger.info(f"🚀 Loading config: {config}")
 
             try:
-                ds = load_dataset(self.dataset, **current_options, streaming=self.streaming)
+                # Prefer token provided by preprocessed_downloader.HF_ACCESS_TOKEN, fallback to env var or True
+                token = HF_ACCESS_TOKEN or os.getenv("HF_ACCESS_TOKEN")
+                use_auth = token if token else True
+                ds = load_dataset(self.dataset, **current_options, streaming=self.streaming, use_auth_token=use_auth)
             except Exception as e:
                 logger.error(f"❌ Failed to load dataset {self.dataset} (config: {config}): {e}")
                 continue

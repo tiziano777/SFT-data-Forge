@@ -165,3 +165,8 @@ class DistributionRepository:
         with self.db as db:
             rows = db.query(query, (dataset_id, materialized))
             return [Distribution(**row) for row in rows]
+
+    def delete(self, id: str) -> int:
+        query = f"DELETE FROM {self.table} WHERE id = %s"
+        with self.db as db:
+            return db.execute_command(query, (id,))

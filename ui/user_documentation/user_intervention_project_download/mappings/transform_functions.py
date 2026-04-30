@@ -1,6 +1,7 @@
 import re
 from copy import deepcopy
 from typing import Any, List, Dict
+import json
 
 # NOTA IMPORTANTE sulla firma delle funzioni:
 # Per mantenere la coerenza con la logica in _process_operation, dove 

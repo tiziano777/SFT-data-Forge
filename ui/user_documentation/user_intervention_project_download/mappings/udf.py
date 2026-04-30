@@ -1,11 +1,11 @@
 """
-Validatore di Funzioni Python per User Defined Functions (UDF)
+Python Function Validator for User Defined Functions (UDF)
 =====================================================================================
 
-Supporta parametri multipli di tipi diversi (str, int, float, list, dict)
-mantenendo il requisito che il primo parametro sia sempre func_name: str
+Supports multiple parameters of different types (str, int, float, list, dict)
+while maintaining the requirement that the first parameter is always func_name: str
 
-Output: tipo di ritorno può essere list[str] OPPURE str
+Output: return type can be list[str] OR str
 """
 
 import ast
@@ -14,38 +14,38 @@ from typing import Dict, Any, Optional
 FN_PLACEHOLDER = '''
 def user_defined_function(func_name: str, **kwargs) -> Union[list[str], str]:
     """
-    func_name: sempre obbligatorio come primo parametro (str)
-    **kwargs: parametri aggiuntivi opzionali denominati param_[i] (int, float, list, dict)
+    func_name: always required as the first parameter (str)
+    **kwargs: optional additional parameters named param_[i] (int, float, list, dict)
     """
-    # Implementa la tua logica qui #
-    # Ora puoi ritornare una lista di stringhe O una singola stringa
-    return ["risultato1", "risultato2"]
+    # Implement your logic here #
+    # Now you can return a list of strings OR a single string
+    return ["result1", "result2"]
 '''
 
 # ============================================================================
-# 1. FUNZIONE PRINCIPALE DI VALIDAZIONE
+# 1. MAIN VALIDATION FUNCTION
 # ============================================================================
 
 def validate_user_function(user_code: str, func_name: Optional[str] = None) -> Dict[str, Any]:
     """
-    Valida che il codice utente sia una funzione Python valida con i requisiti specifici.
-    
-    REQUISITI AGGIORNATI:
-    - Primo parametro deve essere: func_name: str
-    - Tipo di ritorno deve essere: list[str], List[str], OPPURE str
-    - Sintassi e indentazione corrette
-    
+    Validates that the user code is a valid Python function with specific requirements.
+
+    UPDATED REQUIREMENTS:
+    - First parameter must be: func_name: str
+    - Return type must be: list[str], List[str], OR str
+    - Correct syntax and indentation
+
     Args:
-        user_code (str): Codice Python da validare
-        func_name (Optional[str]): Nome specifico della funzione da cercare (opzionale)
-    
+        user_code (str): Python code to validate
+        func_name (Optional[str]): Specific function name to search for (optional)
+
     Returns:
-        Dict con:
-            - is_valid (bool): True se la funzione è valida
-            - errors (List[str]): Lista di errori riscontrati
-            - function_name (Optional[str]): Nome della funzione trovata
-            - warnings (List[str]): Avvisi non bloccanti
-            - return_type (Optional[str]): Tipo di ritorno rilevato ('list' o 'str')
+        Dict with:
+            - is_valid (bool): True if the function is valid
+            - errors (List[str]): List of errors found
+            - function_name (Optional[str]): Name of the function found
+            - warnings (List[str]): Non-blocking warnings
+            - return_type (Optional[str]): Detected return type ('list' or 'str')
     """
     result = {
         'is_valid': False,
@@ -53,15 +53,15 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
         'warnings': [],
         'function_name': None,
         'ast_tree': None,
-        'return_type': None  # Nuovo campo per indicare il tipo di ritorno
+        'return_type': None  # New field to indicate the return type
     }
     
     # ------------------------------------------------------------------------
-    # FASE 1: Validazione sintattica di base con AST
+    # PHASE 1: Basic syntactic validation with AST
     # ------------------------------------------------------------------------
     
     if not user_code or not user_code.strip():
-        result['errors'].append("Il codice è vuoto")
+        result['errors'].append("The code is empty")
         return result
     
     code_str = user_code.strip()
@@ -70,56 +70,56 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
         tree = ast.parse(code_str)
         result['ast_tree'] = tree
     except SyntaxError as e:
-        result['errors'].append(f"Errore di sintassi alla linea {e.lineno}: {e.msg}")
+        result['errors'].append(f"Syntax error at line {e.lineno}: {e.msg}")
         return result
     except IndentationError as e:
-        result['errors'].append(f"Errore di indentazione alla linea {e.lineno}: {e.msg}")
+        result['errors'].append(f"Indentation error at line {e.lineno}: {e.msg}")
         return result
     except Exception as e:
-        result['errors'].append(f"Errore durante il parsing del codice: {str(e)}")
+        result['errors'].append(f"Error during code parsing: {str(e)}")
         return result
     
     # ------------------------------------------------------------------------
-    # FASE 2: Ricerca definizioni di funzione nell'AST
+    # PHASE 2: Search for function definitions in the AST
     # ------------------------------------------------------------------------
     
     function_defs = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
     
     if not function_defs:
-        result['errors'].append("Il codice non contiene definizioni di funzione (manca 'def nome_funzione:')")
+        result['errors'].append("The code does not contain function definitions (missing 'def function_name:')")
         return result
     
     if func_name:
         matching_funcs = [f for f in function_defs if f.name == func_name]
         if not matching_funcs:
-            result['errors'].append(f"Nessuna funzione chiamata '{func_name}' trovata nel codice")
+            result['errors'].append(f"No function named '{func_name}' found in the code")
             return result
         target_func = matching_funcs[0]
     else:
         if len(function_defs) > 1:
             result['warnings'].append(
-                f"Trovate {len(function_defs)} funzioni. Verrà usata '{function_defs[0].name}'. "
-                f"Specifica un nome se vuoi validarne una diversa."
+                f"Found {len(function_defs)} functions. '{function_defs[0].name}' will be used. "
+                f"Specify a name if you want to validate a different one."
             )
         target_func = function_defs[0]
     
     result['function_name'] = target_func.name
     
     # ------------------------------------------------------------------------
-    # FASE 3: Validazione specifica dei requisiti
+    # PHASE 3: Specific requirements validation
     # ------------------------------------------------------------------------
     
-    # 3.1 CONTROLLO PRIMO PARAMETRO: deve essere 'func_name: str'
+    # 3.1 FIRST PARAMETER CHECK: must be 'func_name: str'
     
     if not target_func.args.args:
-        result['errors'].append("La funzione non ha parametri. Deve avere almeno 'func_name: str' come primo parametro")
+        result['errors'].append("The function has no parameters. It must have at least 'func_name: str' as the first parameter")
     else:
         first_arg = target_func.args.args[0]
         
         if first_arg.arg != 'func_name':
             result['errors'].append(
-                f"Il primo parametro deve chiamarsi 'func_name', non '{first_arg.arg}'. "
-                f"Esempio: def {target_func.name}(func_name: str) -> ..."
+                f"The first parameter must be named 'func_name', not '{first_arg.arg}'. "
+                f"Example: def {target_func.name}(func_name: str) -> ..."
             )
         
         if hasattr(first_arg, 'annotation') and first_arg.annotation:
@@ -133,21 +133,21 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
                 
                 if 'str' not in normalized:
                     result['errors'].append(
-                        f"Il primo parametro deve avere tipo 'str', non '{ann_str}'. "
-                        f"Esempio: def {target_func.name}(func_name: str) -> ..."
+                        f"The first parameter must have type 'str', not '{ann_str}'. "
+                        f"Example: def {target_func.name}(func_name: str) -> ..."
                     )
             except:
                 result['warnings'].append(
-                    "Impossibile verificare il type hint del primo parametro. "
-                    "Assicurati che sia 'func_name: str'"
+                    "Unable to verify the type hint of the first parameter. "
+                    "Make sure it is 'func_name: str'"
                 )
         else:
             result['warnings'].append(
-                f"Manca il type hint per il primo parametro. "
-                f"Dovrebbe essere: def {target_func.name}(func_name: str) -> ..."
+                f"Missing type hint for the first parameter. "
+                f"It should be: def {target_func.name}(func_name: str) -> ..."
             )
     
-    # 3.2 CONTROLLO TIPO DI RITORNO: MODIFICATO per supportare 'list[str]' OPPURE 'str'
+    # 3.2 RETURN TYPE CHECK: MODIFIED to support 'list[str]' OR 'str'
     
     if target_func.returns:
         try:
@@ -166,7 +166,7 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
                 .lower()
             )
             
-            # Tipi di ritorno validi (aggiornati)
+            # Valid return types (updated)
             valid_list_return = any(
                 valid in normalized_return 
                 for valid in ['list[str]', 'list[ str ]', 'list [ str ]']
@@ -177,16 +177,16 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
                 for valid in ['str', 'string', 'builtins.str']
             )
             
-            # Controlla Union types
+            # Check Union types
             if 'union' in normalized_return or '|' in normalized_return:
-                # Supporta Union[list[str], str] o list[str] | str
+                # Supports Union[list[str], str] or list[str] | str
                 has_list = any(valid in normalized_return for valid in ['list[str]', 'list[ str ]'])
                 has_str = any(valid in normalized_return for valid in ['str', 'string'])
                 if has_list or has_str:
-                    result['return_type'] = 'union'  # Può essere lista o stringa
+                    result['return_type'] = 'union'  # Can be list or string
                 else:
                     result['errors'].append(
-                        f"Il tipo di ritorno Union deve includere 'list[str]' e/o 'str'. Trovato: '{return_str}'"
+                        f"The Union return type must include 'list[str]' and/or 'str'. Found: '{return_str}'"
                     )
             
             elif valid_list_return:
@@ -195,23 +195,23 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
                 result['return_type'] = 'str'
             else:
                 result['errors'].append(
-                    f"Il tipo di ritorno deve essere 'list[str]', 'List[str]', OPPURE 'str', non '{return_str}'. "
-                    f"Esempio: def {target_func.name}(func_name: str) -> list[str]:"
-                    f"O: def {target_func.name}(func_name: str) -> str:"
+                    f"The return type must be 'list[str]', 'List[str]', OR 'str', not '{return_str}'. "
+                    f"Example: def {target_func.name}(func_name: str) -> list[str]:"
+                    f"Or: def {target_func.name}(func_name: str) -> str:"
                 )
         except:
             result['warnings'].append(
-                "Impossibile verificare il type hint del valore di ritorno. "
-                "Assicurati che sia '-> list[str]' o '-> str'"
+                "Unable to verify the return value type hint. "
+                "Make sure it is '-> list[str]' or '-> str'"
             )
     else:
         result['warnings'].append(
-            f"Manca il type hint per il valore di ritorno. "
-            f"Dovrebbe essere: def {target_func.name}(func_name: str) -> list[str]:"
-            f"Oppure: def {target_func.name}(func_name: str) -> str:"
+            f"Missing type hint for the return value. "
+            f"It should be: def {target_func.name}(func_name: str) -> list[str]:"
+            f"Or: def {target_func.name}(func_name: str) -> str:"
         )
     
-    # 3.3 CONTROLLO SICUREZZA (invariato)
+    # 3.3 SECURITY CHECK (unchanged)
     
     dangerous_operations = []
     
@@ -235,19 +235,19 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
                                       'os.system', 'subprocess', 'popen', 'input']
                 
                 if any(func in call_str.lower() for func in dangerous_functions):
-                    dangerous_operations.append(f"chiamata a funzione rischiosa: {call_str[:50]}...")
+                    dangerous_operations.append(f"risky function call: {call_str[:50]}...")
             except:
                 pass
     
     if dangerous_operations:
         result['warnings'].append(
-            f"Trovate {len(dangerous_operations)} operazioni potenzialmente pericolose. "
-            f"Assicurati di fidarti di questo codice."
+            f"Found {len(dangerous_operations)} potentially dangerous operations. "
+            f"Make sure you trust this code."
         )
         result['warnings'].extend(dangerous_operations[:3])
     
     # ------------------------------------------------------------------------
-    # FASE 4: Determinazione validità finale
+    # PHASE 4: Final validity determination
     # ------------------------------------------------------------------------
     
     result['is_valid'] = len(result['errors']) == 0
@@ -255,43 +255,43 @@ def validate_user_function(user_code: str, func_name: Optional[str] = None) -> D
     return result
 
 # ============================================================================
-# 2. FUNZIONE DI ESECUZIONE SICURA CON PARAMETRI MULTIPLI 
+# 2. SAFE EXECUTION FUNCTION WITH MULTIPLE PARAMETERS
 # ============================================================================
 
 def execute_user_function_safely(
     user_code: str, 
     func_name: str, 
     params: Dict[str, Any],
-    expected_return_type: Optional[str] = None  # Nuovo parametro opzionale
+    expected_return_type: Optional[str] = None  # New optional parameter
 ) -> Dict[str, Any]:
     """
-    Esegue una funzione utente in un ambiente limitato (sandbox).
-    Supporta parametri multipli di tipi diversi.
-    
-    AGGIORNATO: Supporta sia list[str] che str come tipo di ritorno.
-    
+    Executes a user function in a restricted environment (sandbox).
+    Supports multiple parameters of different types.
+
+    UPDATED: Supports both list[str] and str as return type.
+
     Args:
-        user_code (str): Codice Python con la funzione
-        func_name (str): Nome della funzione da eseguire
-        params (Dict[str, Any]): Dizionario di parametri da passare alla funzione.
-                                 DEVE contenere 'func_name' come prima chiave con valore str.
-        expected_return_type (Optional[str]): Tipo di ritorno atteso ('list', 'str', o 'union').
-                                              Se None, verifica automaticamente.
-    
+        user_code (str): Python code with the function
+        func_name (str): Name of the function to execute
+        params (Dict[str, Any]): Dictionary of parameters to pass to the function.
+                                 MUST contain 'func_name' as the first key with a str value.
+        expected_return_type (Optional[str]): Expected return type ('list', 'str', or 'union').
+                                              If None, verifies automatically.
+
     Returns:
-        Dict con:
-            - success (bool): True se l'esecuzione è riuscita
-            - result (Any): Risultato della funzione
-            - return_type (str): Tipo effettivo del risultato ('list' o 'str')
-            - error (Optional[str]): Messaggio di errore se fallisce
-            - execution_time (float): Tempo di esecuzione in secondi
+        Dict with:
+            - success (bool): True if execution succeeded
+            - result (Any): Result of the function
+            - return_type (str): Actual type of the result ('list' or 'str')
+            - error (Optional[str]): Error message if it fails
+            - execution_time (float): Execution time in seconds
     """
     import time
     
     result = {
         'success': False,
         'result': None,
-        'return_type': None,  # Nuovo campo
+        'return_type': None,  # New field
         'error': None,
         'execution_time': 0.0
     }

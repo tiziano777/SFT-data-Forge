@@ -50,6 +50,10 @@ def _render_metadata_form(st, distribution: Distribution, vocab_options: Dict):
                                  height=150, key="description_input")
         version = st.text_input("Versione *", value=distribution.version, key="version_input")
 
+        # Read-only display of generation provenance
+        query_display = st.text_area("Query", value=distribution.query or "", height=80, key="query_display", disabled=True)
+        script_display = st.text_area("Script", value=distribution.script or "", height=80, key="script_display", disabled=True)
+
         split_options, split_default_index = vocab_options.get('distribution_split', ([], 0))
         if split_options:
             distribution_split = st.selectbox(

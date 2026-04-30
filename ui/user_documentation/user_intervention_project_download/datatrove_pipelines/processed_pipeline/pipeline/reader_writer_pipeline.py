@@ -3,6 +3,7 @@ import json
 import os
 import traceback
 import gzip
+from pathlib import Path
 from datatrove.io import DataFolder
 
 import sys
@@ -13,25 +14,27 @@ from reader.unified_reader import UnifiedReader
 from writers.writer import CustomJsonlWriter
 
 # ============================================================================
-# CONFIGURAZIONE WRITER
+# WRITER CONFIGURATION
 # ============================================================================
 
-# Configurazione dei path
-base_input_path = "<PROJECT_ROOT>/nfs/data-download/"
-base_output_path = "<PROJECT_ROOT>/nfs/processed-data/"
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-# Configura il writer personalizzato - compression gzip è ora forzata
+# Path configuration
+base_input_path = os.getenv("RAW_DATA_DIR", str(_PROJECT_ROOT / "nfs" / "data-download")) + "/"
+base_output_path = os.getenv("PROCESSED_DATA_DIR", str(_PROJECT_ROOT / "nfs" / "processed-data")) + "/"
+
+# Configure the custom writer - gzip compression is now enforced
 custom_jsonl_writer = CustomJsonlWriter(
     base_input_path=base_input_path,
     base_output_path=base_output_path,
-    compression="gzip",  # Sempre gzip
+    compression="gzip",  # Always gzip
 )
 
 # ============================================================================
-# CONFIGURAZIONE READER UNIFICATO
+# UNIFIED READER CONFIGURATION
 # ============================================================================
 
-dataset_path = "<PROJECT_ROOT>/nfs/data-download/velvet_v1/glaive_dataset/"
+dataset_path = base_input_path + "velvet_v1/glaive_dataset/"
 dataset_folder = DataFolder(
     path=dataset_path,
     auto_mkdir=True,

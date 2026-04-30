@@ -66,6 +66,8 @@ from ui.processed.process.mapping.udf_creation_handler import show_udf_creation_
 from ui.prompt_management.prompt_action_selection_handler import show_system_prompt_management
 from ui.template_schema_management.template_schema_action_selection_handler import show_template_schema_management
 from ui.chat_type_management.chat_type_management_handler import show_vocab_chat_type_management
+from ui.admin_console.admin_console_handler import show_admin_console
+from ui.logs_management.logs_management_handler import show_logs_management
 
 # === Pipeline imports ===
 from agents.pipelines.source_schema_pipeline import create_pipeline
@@ -225,7 +227,9 @@ STAGE_HANDLERS = {
     "chat_type_management": lambda st: show_vocab_chat_type_management(st),
     "data_lineage": lambda st: data_lineage_handler(st),
     "system_prompt_lineage": lambda st: system_prompt_lineage_handler(st),
-    "recipe_lineage": lambda st: recipe_lineage_handler(st)
+    "recipe_lineage": lambda st: recipe_lineage_handler(st),
+    "admin_console": lambda st: show_admin_console(st),
+    "logs_management": lambda st: show_logs_management(st)
 }
 
 # === MAIN ===
@@ -279,7 +283,12 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("📚 Documentation & Logs")
     docs_btn = st.sidebar.button("📖 Docs", on_click=lambda: reset_dashboard_session_state(st, home_vars))
-    # logs_btn = st.sidebar.button("📜 Logs", on_click=lambda: reset_dashboard_session_state(st, home_vars))
+    logs_btn = st.sidebar.button("📜 Logs", on_click=lambda: reset_dashboard_session_state(st, home_vars))
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("🛡️ Admin console")
+    admin_btn = st.sidebar.button("🔧 Admin Console", on_click=lambda: reset_dashboard_session_state(st, home_vars))
+    
     st.sidebar.markdown("---")
     st.sidebar.json(st.session_state)
 
@@ -336,6 +345,12 @@ def main():
         st.rerun()
     elif docs_btn:
         st.session_state.current_stage = "docs"
+        st.rerun()
+    elif logs_btn:
+        st.session_state.current_stage = "logs_management"
+        st.rerun()
+    elif admin_btn:
+        st.session_state.current_stage = "admin_console"
         st.rerun()
 
     handler = STAGE_HANDLERS.get(st.session_state.current_stage)

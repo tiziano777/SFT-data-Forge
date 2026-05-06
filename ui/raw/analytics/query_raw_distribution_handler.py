@@ -237,7 +237,7 @@ def _render_query_interface(st, data_path: str, file_extension: str):
     with col_exec1:
         st.info("💡 La query eseguirà su TUTTI i dati. La visualizzazione sarà troncata a 500 righe.")
         limit_results = st.number_input(
-            "Max righe da visualizzare:",
+            "Max righe da salvare:",
             min_value=10,
             value=st.session_state.get("limit_results_input", 500),
             step=100,

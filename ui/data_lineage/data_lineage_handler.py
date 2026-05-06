@@ -244,6 +244,27 @@ def data_lineage_handler(st_app):
         df['node_name'] = df.apply(lambda r: fetch_name(db, r.get('node_id'), r.get('node_type')), axis=1)
         df['from_name'] = df.apply(lambda r: fetch_name(db, r.get('from_id'), r.get('from_type')), axis=1)
 
+        # Recuperiamo per le distributions anche i campi `query` e `script`
+        def fetch_dist_fields(rid):
+            if not rid or rid == 'None':
+                return (None, None)
+            try:
+                dist = distribution_repo.get_by_id(rid)
+                if not dist:
+                    return (None, None)
+                return (getattr(dist, 'query', None), getattr(dist, 'script', None))
+            except Exception:
+                return (None, None)
+
+        # Applichiamo solo quando il tipo è Distribution, altrimenti None
+        node_dist_fields = df.apply(lambda r: fetch_dist_fields(r.get('node_id')) if r.get('node_type') == 'Distribution' else (None, None), axis=1)
+        from_dist_fields = df.apply(lambda r: fetch_dist_fields(r.get('from_id')) if r.get('from_type') == 'Distribution' else (None, None), axis=1)
+
+        df['node_query'] = [t[0] for t in node_dist_fields]
+        df['node_script'] = [t[1] for t in node_dist_fields]
+        df['from_query'] = [t[0] for t in from_dist_fields]
+        df['from_script'] = [t[1] for t in from_dist_fields]
+
         # Costruiamo una mappa id->nome per l'uso nella visualizzazione del grafo
         name_map = {}
         for _, r in df.iterrows():
@@ -269,6 +290,14 @@ def data_lineage_handler(st_app):
             components.html(raw_html, height=graph_height + 50)
 
         with tab2:
+            # Pulsante per scaricare il dataframe come CSV (con colonne query/script prefissate)
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="⬇️ Scarica CSV",
+                data=csv,
+                file_name=f"lineage_{st.session_state.get('current_node_id', 'export')}.csv",
+                mime='text/csv'
+            )
             st.dataframe(df, use_container_width=True)
 
         # Se nella querystring è presente 'selected' mostriamo i dettagli del nodo

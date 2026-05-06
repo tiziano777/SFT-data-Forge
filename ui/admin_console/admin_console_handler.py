@@ -441,16 +441,25 @@ def _show_distribution_alignment(st, dist_repo):
     col_all, col_none = st.columns(2)
     with col_all:
         if st.button("✅ Select all"):
+            # Set each checkbox widget's session_state key so Streamlit updates the UI
+            for d in orphans:
+                st.session_state[f"align_{d.id}"] = True
             st.session_state["alignment_selected"] = [d.id for d in orphans]
             st.rerun()
     with col_none:
         if st.button("⬜ Deselect all"):
+            for d in orphans:
+                st.session_state[f"align_{d.id}"] = False
             st.session_state["alignment_selected"] = []
             st.rerun()
 
-    # Initialize selection state
+    # Initialize selection state and per-checkbox keys
     if "alignment_selected" not in st.session_state:
         st.session_state["alignment_selected"] = []
+    for d in orphans:
+        key = f"align_{d.id}"
+        if key not in st.session_state:
+            st.session_state[key] = d.id in st.session_state["alignment_selected"]
 
     # Checkboxes for each orphan
     selected_ids = []

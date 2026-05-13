@@ -126,10 +126,9 @@ class BaseCustomWriter:
 
                     output_path = self._output_filepath(lang, rank, base_filename)
 
-                    if self.distribution_relative:
-                        output_subpath = os.path.normpath(f"{self.distribution_relative}/{lang}")
-                    else:
-                        output_subpath = lang
+                    # Il subpath NON contiene la lingua - la lingua è solo per l'output fisico
+                    # Questo permette al mapped_pipeline di avere il path corretto
+                    output_subpath = self.distribution_relative.strip("/") if self.distribution_relative else ""
 
                     doc_dict = {
                         "id":       document.id,

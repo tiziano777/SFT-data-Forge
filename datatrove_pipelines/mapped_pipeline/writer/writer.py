@@ -65,7 +65,17 @@ class BaseCustomWriter:
         output["_dataset_name"] = ds_name if ds_name.startswith("mapped__") else f"mapped__{ds_name}"
         output["_dataset_path"] = to_binded_path(meta.get("_dataset_path", ""))
         output["_filename"] = meta.get("_filename", "") # Riceve il valore già aggiornato in run()
-        output["_subpath"] = meta.get("_subpath", "")
+
+        # Pulisci il subpath rimuovendo la lingua se presente (compatibilità vecchi dati)
+        subpath = meta.get("_subpath", "")
+        if subpath:
+            parts = subpath.split('/')
+            if parts and len(parts[-1]) <= 3 and parts[-1].isalpha():
+                lang_code = parts[-1]
+                if lang_code in {'en', 'it', 'fr', 'de', 'es', 'pt', 'nl', 'pl', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi', 'te', 'un'}:
+                    subpath = '/'.join(parts[:-1])
+        output["_subpath"] = subpath
+
         output["_lang"] = meta.get("_lang", "un")
         output["_id_hash"] = meta.get("_id_hash", "")
 
@@ -100,6 +110,17 @@ class BaseCustomWriter:
             distribution_path = metadata.get("_subpath", "")
             base = self.base_output_path
             dataset_name = base.name
+
+            # Rimuovi la lingua dal subpath se è stata aggiunta per errore
+            # (compatibilità con vecchi dati del processed_pipeline)
+            if distribution_path:
+                parts = distribution_path.split('/')
+                # Se l'ultimo componente è un codice lingua ISO (2-3 caratteri), rimuovilo
+                if parts and len(parts[-1]) <= 3 and parts[-1].isalpha():
+                    lang_code = parts[-1]
+                    # Controlla se è una lingua comune
+                    if lang_code in {'en', 'it', 'fr', 'de', 'es', 'pt', 'nl', 'pl', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi', 'te', 'un'}:
+                        distribution_path = '/'.join(parts[:-1])
 
             # Se distribution_path è vuoto o '.', usiamo base
             if not distribution_path or distribution_path == '.':

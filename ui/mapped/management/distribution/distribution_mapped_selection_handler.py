@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from utils.fs_func import list_files, list_dirs
 from utils.path_utils import to_binded_path, to_internal_path
 from utils.sample_reader import load_dataset_samples
-from utils.extract_glob import generate_dataset_globs
+from utils.extract_glob import generate_dataset_globs, get_compound_extension
 from utils.streamlit_func import reset_dashboard_session_state
 from config.state_vars import distribution_keys
 from data_class.repository.table.dataset_repository import DatasetRepository
@@ -428,7 +428,7 @@ def _create_new_distribution(st_app, current_path: str, distribution_uri: str, d
 
         # Estrai metadata dal path
         file_glob = generate_dataset_globs(current_path)[0]
-        _, ext = os.path.splitext(file_glob)
+        ext = get_compound_extension(file_glob)
         
         dataset_repo = DatasetRepository(st_app.session_state.db_manager)
         ds = dataset_repo.get_by_id(st_app.session_state.selected_dataset_id)
@@ -545,7 +545,7 @@ def _create_distribution_from_dataset(st_app, current_path: str, distribution_ur
             files = list_files(current_path)
             if files:
                 first_file = files[0]
-                _, ext = os.path.splitext(first_file)
+                ext = get_compound_extension(first_file)
                 file_glob = os.path.join(current_path, f"*{ext}")
                 file_patterns = [file_glob]
             else:
@@ -554,7 +554,7 @@ def _create_distribution_from_dataset(st_app, current_path: str, distribution_ur
                 return
         
         file_glob = file_patterns[0]
-        _, ext = os.path.splitext(file_glob)
+        ext = get_compound_extension(file_glob)
         
         # Recupera il dataset selezionato
         dataset_repo = DatasetRepository(st_app.session_state.db_manager)

@@ -92,11 +92,33 @@ def _compact_sql_query(query: str) -> str:
     query = re.sub(r'\s+', ' ', query)
     return query.strip()
 
+def _detect_source_format(directory_path: str):
+    """Detect file format (jsonl/jsonl.gz/parquet) by scanning files on disk."""
+    if not os.path.isdir(directory_path):
+        raise FileNotFoundError(f"Source directory not found: {directory_path}")
+
+    for entry in os.scandir(directory_path):
+        if not entry.is_file():
+            continue
+        name = entry.name.lower()
+        if name.endswith('.jsonl.gz') or name.endswith('.json.gz'):
+            return '*.jsonl.gz', 'JSONL', 'GZIP'
+        elif name.endswith('.jsonl') or name.endswith('.json'):
+            return '*.jsonl', 'JSONL', 'NONE'
+        elif name.endswith('.parquet'):
+            return '*.parquet', 'PARQUET', 'NONE'
+
+    raise ValueError(f"No supported files (jsonl/jsonl.gz/parquet) found in: {directory_path}")
+
+
 def _materialize_with_sampling(dist_id, source_uri, target_file_path, sampling_rate: float):
     # 1. Preparazione parametri e path
     sampling_pct = sampling_rate * 100
-    source_path = to_internal_path(source_uri.replace(BASE_PREFIX, ""))
-    source_path = f"{source_path.rstrip('/')}/*.jsonl.gz"
+    source_dir = to_internal_path(source_uri.replace(BASE_PREFIX, "")).rstrip('/')
+
+    # Dynamic format detection
+    glob_pattern, fmt, compression = _detect_source_format(source_dir)
+    source_path = f"{source_dir}/{glob_pattern}"
     
     output_directory = target_file_path.rstrip("/")
     if output_directory.endswith(".jsonl.gz"):
@@ -123,7 +145,7 @@ def _materialize_with_sampling(dist_id, source_uri, target_file_path, sampling_r
     new_dist.id = None
     new_dist.derived_from = dist_id
     new_dist.uri = target_uri
-    new_dist.name = f"Downsampled__{sampling_rate:.2f}__{distribution.name}"
+    new_dist.name = f"downsampled__{sampling_rate:.2f}__{distribution.name}"
     new_dist.version = "1.0"
     new_dist.issued = datetime.utcnow()
     new_dist.modified = datetime.utcnow()
@@ -136,14 +158,24 @@ def _materialize_with_sampling(dist_id, source_uri, target_file_path, sampling_r
 
     # 3. Query di esportazione (Eseguita solo se i file NON esistono fisicamente)
     limit_bytes = 124 * 1024 * 1024
+
+    if fmt == 'PARQUET':
+        read_expr = f"read_parquet('{source_path}', union_by_name=True)"
+        out_format= "PARQUET"
+        out_compression = ""
+    else:
+        read_expr = f"read_json_auto('{source_path}', union_by_name=True)"
+        out_format= "JSONL"
+        out_compression = "COMPRESSION GZIP,"
+
     query = f"""
         COPY (
-            SELECT * FROM read_json_auto('{source_path}', union_by_name=True) 
+            SELECT * FROM {read_expr}
             USING SAMPLE {sampling_pct}% (SYSTEM)
-        ) TO '{physical_path}' 
+        ) TO '{physical_path}'
         (
-            FORMAT JSONL, 
-            COMPRESSION GZIP,
+            FORMAT {out_format},
+            {out_compression}
             FILE_SIZE_BYTES {limit_bytes},
             FILENAME_PATTERN "downsampled__data_{{i}}"
         );
@@ -179,6 +211,10 @@ def _split_receipt_strategy(st):
         # Rimane solo nella strategia float
         if replica_total < 1:
             float_recipe[dist_id] = strategy.copy()
+            strategy["replica"] = replica_total
+            strategy["samples"] = int(strategy["samples"] * replica_total)
+            strategy["tokens"] = int(strategy["tokens"] * replica_total)
+            strategy["words"] = int(strategy["words"] * replica_total)
             continue
 
         # Caso 2: Numero intero (es. 2.0, 3)
@@ -420,7 +456,7 @@ def data_studio_recipe_contract_final_step(st):
 
         st.dataframe(download_recipe["entries"].values())
 
-        save_format = st.selectbox("Select format to save the recipe", ["JSON", "CSV", "YAML"], index=2)
+        save_format= st.selectbox("Select format to save the recipe", ["JSON", "CSV", "YAML"], index=2)
 
         if st.button(f"Confirm & Save to DB"):
             result, msg = _store_recipe_in_db(st, final_recipe)
@@ -428,17 +464,17 @@ def data_studio_recipe_contract_final_step(st):
             if result:
                 st.success(f"Recipe stored in Database!")
 
-                if save_format == "JSON":
+                if save_format== "JSON":
                     data = json.dumps(download_recipe, indent=4)
                     file_name = f"{recipe_entity.name}_recipe.json"
                     mime = "application/json"
-                elif save_format == "CSV":
+                elif save_format== "CSV":
                     # Flatten entries for CSV export
                     flattened_entries = pd.json_normalize(download_recipe["entries"].values())
                     data = flattened_entries.to_csv(index=False)
                     file_name = f"{recipe_entity.name}_recipe.csv"
                     mime = "text/csv"
-                elif save_format == "YAML":
+                elif save_format== "YAML":
                     data = yaml.dump(download_recipe, sort_keys=False)
                     file_name = f"{recipe_entity.name}_recipe.yaml"
                     mime = "text/yaml"

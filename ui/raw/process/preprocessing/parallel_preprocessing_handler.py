@@ -162,7 +162,7 @@ def show_parallel_preprocessing(st_app):
     st_app.markdown("---")
     st_app.subheader("🎯 Esecuzione Preprocessing")
 
-    output_format = st_app.selectbox(
+    output_format= st_app.selectbox(
         "Formato di output",
         ["jsonl.gz", "parquet"],
         index=0,

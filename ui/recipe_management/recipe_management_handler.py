@@ -1,6 +1,8 @@
 import logging
+import uuid
+import yaml
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,156 @@ def _filter_recipes(recipes, search_query: str, lang_filter: str):
             continue
         filtered.append(r)
     return filtered
+
+# ─────────────────────────────────────────────
+# YML UPLOAD
+# ─────────────────────────────────────────────
+
+def _validate_yml_structure(data: dict) -> str | None:
+    """Valida la struttura del YAML. Ritorna errore o None se valido."""
+    required_top = ["name", "description", "scope", "tasks", "entries"]
+    for key in required_top:
+        if key not in data:
+            return f"Campo obbligatorio mancante: '{key}'"
+    if not isinstance(data.get("entries"), dict) or not data["entries"]:
+        return "Il campo 'entries' deve essere un dizionario non vuoto con almeno una distribution."
+    for uri, entry in data["entries"].items():
+        if not isinstance(entry, dict):
+            return f"L'entry '{uri}' deve essere un dizionario."
+        for field in ["dist_id", "chat_type", "replica"]:
+            if field not in entry:
+                return f"Entry '{uri}': campo obbligatorio mancante '{field}'."
+        sp_list = entry.get("system_prompt", [])
+        sp_names = entry.get("system_prompt_name", [])
+        if not isinstance(sp_list, list) or not isinstance(sp_names, list):
+            return f"Entry '{uri}': system_prompt e system_prompt_name devono essere liste."
+        if len(sp_list) != len(sp_names):
+            return f"Entry '{uri}': system_prompt e system_prompt_name devono avere la stessa lunghezza."
+    return None
+
+
+def _import_recipe_from_yml(st, data: dict) -> str:
+    """
+    Importa una recipe da dati YAML validati.
+    Ritorna messaggio di successo o lancia Exception con errore descrittivo.
+    """
+    from data_class.entity.table.recipe import Recipe
+    from data_class.entity.table.strategy import Strategy
+    from data_class.entity.table.strategy_system_prompt import StrategySystemPrompt
+    from data_class.entity.table.system_prompt import SystemPrompt
+    from data_class.repository.table.recipe_repository import RecipeRepository
+    from data_class.repository.table.strategy_repository import StrategyRepository
+    from data_class.repository.table.strategy_system_prompt_repository import StrategySystemPromptRepository
+    from data_class.repository.table.system_prompt_repository import SystemPromptRepository
+    from data_class.repository.table.distribution_repository import DistributionRepository
+
+    db = st.session_state.db_manager
+    recipe_repo = RecipeRepository(db)
+    strategy_repo = StrategyRepository(db)
+    ssp_repo = StrategySystemPromptRepository(db)
+    sp_repo = SystemPromptRepository(db)
+    dist_repo = DistributionRepository(db)
+
+    yml_id = data.get("id")
+    yml_name = data["name"]
+    yml_desc = data["description"]
+    yml_scope = data["scope"]
+    yml_tasks = data.get("tasks", [])
+    yml_tags = data.get("tags", [])
+    yml_derived_from = data.get("derived_from")
+
+    # ── Risoluzione Recipe ──
+    existing_by_id = recipe_repo.get_by_id(yml_id) if yml_id else None
+    existing_by_name = recipe_repo.get_by_name(yml_name)
+
+    recipe_entity = None
+
+    if existing_by_id:
+        # UUID esiste già → crea nuova recipe con nuovo UUID, derived_from = vecchio UUID
+        recipe_entity = Recipe(
+            name=yml_name if not existing_by_name else f"{yml_name}_{uuid.uuid4().hex[:6]}",
+            description=yml_desc,
+            scope=yml_scope,
+            tasks=yml_tasks,
+            tags=yml_tags,
+            derived_from=str(existing_by_id.id),
+        )
+        recipe_entity = recipe_repo.insert(recipe_entity)
+    elif existing_by_name and not yml_id:
+        # Name esiste, UUID assente → upsert sulla recipe esistente
+        existing_by_name.description = yml_desc
+        existing_by_name.scope = yml_scope
+        existing_by_name.tasks = yml_tasks
+        existing_by_name.tags = yml_tags
+        existing_by_name.modified = datetime.now(timezone.utc)
+        if yml_derived_from:
+            existing_by_name.derived_from = yml_derived_from
+        recipe_repo.update(existing_by_name)
+        recipe_entity = existing_by_name
+    else:
+        # Nuova recipe
+        recipe_entity = Recipe(
+            name=yml_name,
+            description=yml_desc,
+            scope=yml_scope,
+            tasks=yml_tasks,
+            tags=yml_tags,
+            derived_from=yml_derived_from,
+        )
+        recipe_entity = recipe_repo.insert(recipe_entity)
+
+    if not recipe_entity or not recipe_entity.id:
+        raise RuntimeError("Impossibile creare/trovare la recipe nel DB.")
+
+    # ── Processa ogni entry (distribution + strategy + system prompts) ──
+    created_strategies = 0
+    for uri, entry in data["entries"].items():
+        dist_id = entry.get("dist_id")
+        chat_type = entry.get("chat_type")
+        replica = int(entry.get("replica", 1))
+        sp_contents = entry.get("system_prompt", [])
+        sp_names = entry.get("system_prompt_name", [])
+
+        # Verifica distribution esiste
+        dist = dist_repo.get_by_id(dist_id) if dist_id else None
+        if not dist:
+            raise RuntimeError(f"Distribution con ID '{dist_id}' non trovata nel DB (entry: {uri}).")
+
+        # Crea strategy
+        strategy = Strategy(
+            recipe_id=str(recipe_entity.id),
+            distribution_id=str(dist.id),
+            replication_factor=replica,
+            template_strategy=chat_type,
+        )
+        strategy = strategy_repo.insert(strategy)
+        if not strategy:
+            raise RuntimeError(f"Impossibile creare strategy per distribution '{uri}'.")
+        created_strategies += 1
+
+        # Processa system prompts posizionalmente
+        for sp_name, sp_content in zip(sp_names, sp_contents):
+            existing_sp = sp_repo.get_by_name(sp_name)
+            if not existing_sp:
+                # Crea nuovo system prompt
+                new_sp = SystemPrompt(
+                    id=None,
+                    name=sp_name,
+                    description=f"Imported from recipe '{yml_name}'",
+                    prompt=sp_content,
+                    length=len(sp_content),
+                    _lang="un",
+                )
+                sp_repo.insert(new_sp)
+
+            # Crea strategy_system_prompt
+            ssp_repo.insert(StrategySystemPrompt(
+                strategy_id=str(strategy.id),
+                system_prompt_name=sp_name,
+            ))
+
+    return f"Recipe '{recipe_entity.name}' importata con successo ({created_strategies} strategies create)."
+
 
 # ─────────────────────────────────────────────
 # EDIT SECTION
@@ -342,6 +494,37 @@ def recipe_management_handler(st):
     from ui.data_studio.strategy.stats_retriver.retriver import DistributionStatsRetriever
 
     st.subheader("🍽️ Recipe Management")
+
+    # ── YML Upload Box ──
+    with st.expander("📤 Import Recipe from YML", expanded=False):
+        uploaded_file = st.file_uploader(
+            "Trascina o seleziona un file .yml",
+            type=["yml", "yaml"],
+            key="recipe_yml_upload",
+        )
+        if uploaded_file is not None:
+            if st.button("🚀 Importa Recipe", key="btn_import_yml", type="primary"):
+                try:
+                    content = uploaded_file.read().decode("utf-8")
+                    data = yaml.safe_load(content)
+                    if not isinstance(data, dict):
+                        st.error("Il file YML non contiene un dizionario valido.")
+                    else:
+                        validation_err = _validate_yml_structure(data)
+                        if validation_err:
+                            st.error(f"Validazione fallita: {validation_err}")
+                        else:
+                            result_msg = _import_recipe_from_yml(st, data)
+                            st.success(result_msg)
+                            st.session_state.pop("rm_data_cache", None)
+                            st.rerun()
+                except yaml.YAMLError as e:
+                    st.error(f"Errore parsing YAML: {e}")
+                except RuntimeError as e:
+                    st.error(f"Errore import: {e}")
+                except Exception as e:
+                    st.error(f"Errore imprevisto: {e}")
+
     st.write("---")
 
     if "rm_data_cache" not in st.session_state:

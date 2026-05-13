@@ -578,6 +578,11 @@ class Mapper:
 
         else:
             value_to_set = transformed_values[0] if transformed_values else None
+            # Defensive: unwrap empty list to None for scalar destinations
+            # Prevents [] from being assigned where null is expected
+            if isinstance(value_to_set, list) and len(value_to_set) == 0:
+                #logger.warning(f"Empty list [] detected for scalar path '{dst_path}', converting to None. Operation was: {operation}, transformed_values was: {transformed_values}")
+                value_to_set = None
             self._set_value_at_path(dst_doc, dst_path, value_to_set)
 
     def apply_mapping(self, src_doc: JsonDocument) -> Tuple[JsonDocument | None, bool, List[str]]:

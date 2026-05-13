@@ -23,11 +23,10 @@ def run_mapped_stats_pipeline(distribution_uri: str):
     try:
         reader = UnifiedReader(
             data_folder=input_path,
-            glob_pattern="*.jsonl.gz",
-            recursive=False, # Manteniamo il parametro come nel tuo snippet originale
+            recursive=False,
             text_key="text",
             id_key="id",
-            default_metadata={} 
+            default_metadata={}
         )
         
         low_level_stats = DocStats(

@@ -5,6 +5,30 @@ from collections import defaultdict
 from typing import List, Dict, Set
 import fnmatch
 
+COMPOUND_EXTENSIONS = {
+    'gz': {'jsonl', 'json', 'csv', 'tsv', 'tar', 'ndjson'},
+    'bz2': {'jsonl', 'json', 'csv', 'tsv', 'tar'},
+    'xz': {'jsonl', 'json', 'csv', 'tsv', 'tar'},
+    'zst': {'jsonl', 'json', 'csv', 'tsv', 'tar'},
+}
+
+def get_compound_extension(filename: str) -> str:
+    """
+    Restituisce l'estensione composta di un file (es. '.jsonl.gz' per 'file.jsonl.gz').
+    Se non è un'estensione composta nota, restituisce l'estensione semplice.
+    Restituisce stringa vuota se il file non ha estensione.
+    """
+    parts = filename.rsplit('.', 2)
+    if len(parts) >= 3:
+        last = parts[-1].lower()
+        second_last = parts[-2].lower()
+        if last in COMPOUND_EXTENSIONS and second_last in COMPOUND_EXTENSIONS[last]:
+            return f'.{second_last}.{last}'
+    if len(parts) >= 2 and parts[-1]:
+        return f'.{parts[-1]}'
+    return ''
+
+
 def generate_dataset_globs(root_path: str) -> List[str]:
     """
     Scansiona ricorsivamente la directory radice e genera un elenco di pattern glob 
@@ -47,7 +71,7 @@ def generate_dataset_globs(root_path: str) -> List[str]:
             # 4. Estrai e aggrega le estensioni dei file
             for filename in filenames:
                 # Usa pathlib per gestire correttamente le estensioni (anche .tar.gz)
-                extension = pathlib.Path(filename).suffix
+                extension = get_compound_extension(filename)
                 
                 # Se l'estensione è vuota (file senza estensione), usiamo un placeholder
                 if not extension:
@@ -102,7 +126,8 @@ def _generate_all_globs(dataset_path: str) -> Set[str]:
             if rel_path == '.':
                 # Aggiungi pattern per la root
                 for file in files:
-                    globs.add(f"*{os.path.splitext(file)[1]}" if os.path.splitext(file)[1] else file)
+                    ext = get_compound_extension(file)
+                    globs.add(f"*{ext}" if ext else file)
                 for dir_name in dirs:
                     globs.add(f"{dir_name}/*")
             else:
@@ -112,7 +137,7 @@ def _generate_all_globs(dataset_path: str) -> Set[str]:
                 
                 # Aggiungi pattern specifici per estensioni nelle sottocartelle
                 for file in files:
-                    file_ext = os.path.splitext(file)[1]
+                    file_ext = get_compound_extension(file)
                     if file_ext:
                         globs.add(f"{rel_path}/*{file_ext}")
     

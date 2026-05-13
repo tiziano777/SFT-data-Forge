@@ -187,11 +187,10 @@ def run_mapping_pipeline():
 
     reader= UnifiedReader(
         data_folder=processed_distribution_path,
-        glob_pattern="*.jsonl.gz", # current glob of distribution processed data
         recursive=True,
         text_key="text",
         id_key="id",
-        default_metadata={} 
+        default_metadata={}
     )
     low_level_stats = DocStats(
         output_folder=low_level_stats_path,

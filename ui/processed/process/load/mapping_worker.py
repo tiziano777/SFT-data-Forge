@@ -27,7 +27,7 @@ def run_mapping_pipeline(args):
         dst_schema = args['dst_schema']
         src_schema = args['src_schema']
         glob_pattern = args['glob_pattern']
-        output_format = args.get("output_format", "jsonl.gz")
+        output_format= args.get("output_format", "jsonl.gz")
         
         # 🔴 MANCA LA VALIDAZIONE! Aggiungiamola:
         

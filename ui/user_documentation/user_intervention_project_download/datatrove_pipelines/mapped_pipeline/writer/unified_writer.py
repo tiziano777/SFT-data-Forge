@@ -39,7 +39,7 @@ class UnifiedWriter:
         expand_metadata: bool = False,
         max_file_size: int = -1,
     ):
-        self.output_format = output_format.lower().strip()
+        self.output_format= output_format.lower().strip()
 
         if self.output_format not in self.WRITER_MAPPING:
             raise ValueError(
@@ -54,10 +54,10 @@ class UnifiedWriter:
             "base_output_path": base_output_path,
         }
 
-        if self.output_format == "parquet":
+        if self.output_format== "parquet":
             writer_kwargs["compression"] = compression or "snappy"
             writer_kwargs["batch_size"] = batch_size
-        elif self.output_format == "jsonl.gz":
+        elif self.output_format== "jsonl.gz":
             writer_kwargs["compression"] = compression or "gzip"
 
         logger.info(f"Creazione writer {self.output_format} per {base_output_path}")

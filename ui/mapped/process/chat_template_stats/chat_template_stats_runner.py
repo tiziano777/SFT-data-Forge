@@ -27,11 +27,10 @@ def run_stats_pipeline(distribution_uri: str):
     
     reader = UnifiedReader(
         data_folder=input_path,
-        glob_pattern="*.jsonl.gz",
         recursive=True,
         text_key="text",
         id_key="id",
-        default_metadata={} 
+        default_metadata={}
     )
     
     # Passiamo il path completo di extension a ChatTemplateStats

@@ -383,7 +383,7 @@ def verify_output(path_extractor: PathExtractor, output_format: str = "jsonl.gz"
             log(f"❌ Directory output non trovata: {check_root}")
             return False
 
-        ext_pattern = "*.parquet" if output_format == "parquet" else "*.jsonl.gz"
+        ext_pattern = "*.parquet" if output_format== "parquet" else "*.jsonl.gz"
         output_files = list(check_root.rglob(ext_pattern))
         if not output_files:
             log(f"❌ Nessun file {ext_pattern} generato")
@@ -430,7 +430,7 @@ def main():
         source_dataset_id = params["source_dataset_id"]
         source_distribution_id = params["source_distribution_id"]
         default_metadata = params["default_metadata"]
-        output_format = params.get("output_format", "jsonl.gz")
+        output_format= params.get("output_format", "jsonl.gz")
 
         log(f"📂 Source dataset URI     : {source_dataset_uri}")
         log(f"📂 Source distribution URI: {source_distribution_uri}")

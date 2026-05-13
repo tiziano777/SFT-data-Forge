@@ -117,7 +117,7 @@ def show_parallel_mapping(st):
 
 
     # Bottone per avviare la pipeline ETL
-    output_format = st.selectbox(
+    output_format= st.selectbox(
         "Formato di output",
         ["jsonl.gz", "parquet"],
         index=0,

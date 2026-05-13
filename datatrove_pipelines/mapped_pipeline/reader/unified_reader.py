@@ -25,14 +25,20 @@ class UnifiedReader:
     # Formati che supportano compressione
     COMPRESSION_SUPPORTED = {'jsonl'}
     
-    def __init__(self, data_folder, glob_pattern, recursive=True, 
-                 text_key=None, id_key=None, limit=-1, skip=0, 
-                 file_progress=True, default_metadata=None, 
+    # Glob patterns per formato
+    FORMAT_GLOBS = {
+        'jsonl': '*.jsonl*',
+        'parquet': '*.parquet',
+    }
+
+    def __init__(self, data_folder, glob_pattern=None, recursive=True,
+                 text_key=None, id_key=None, limit=-1, skip=0,
+                 file_progress=True, default_metadata=None,
                  shuffle_files=False, compression=None):
         """
         Args:
             data_folder: DataFolder o percorso stringa
-            glob_pattern: Pattern glob obbligatorio per selezionare i file
+            glob_pattern: Pattern glob per selezionare i file (None per autodetect)
             recursive: Ricerca ricorsiva nelle sottocartelle
             text_key: Chiave per estrarre il testo (None per adapter personalizzato)
             id_key: Chiave per l'ID (None per adapter personalizzato)
@@ -43,10 +49,7 @@ class UnifiedReader:
             shuffle_files: Mescola i file
             compression: Tipo compressione (solo per JSONL, CSV)
         """
-        
-        if not glob_pattern:
-            raise ValueError("Il parametro glob_pattern è obbligatorio")
-        
+
         self.data_folder = data_folder if isinstance(data_folder, DataFolder) else DataFolder(data_folder)
         self.glob_pattern = glob_pattern
         self.recursive = recursive
@@ -69,49 +72,38 @@ class UnifiedReader:
         
         self.reader = self._create_reader()
     
+    def _detect_format_from_files(self):
+        """Scansiona la directory e deduce il formato dai file presenti."""
+        files = self.data_folder.list_files(recursive=self.recursive)
+        if not files:
+            raise ValueError(f"Nessun file trovato in: {self.data_folder.path}")
+
+        first_file = files[0].lower()
+        if first_file.endswith(('.jsonl', '.json', '.jsonl.gz', '.json.gz')):
+            return 'jsonl'
+        elif first_file.endswith('.parquet'):
+            return 'parquet'
+        else:
+            raise ValueError(f"Formato file non riconosciuto: {files[0]}")
+
     def _detect_reader_type(self):
-        """Determina il tipo di reader basato sul glob pattern"""
+        """Determina il tipo di reader basato sul glob pattern o autodetect."""
+        if not self.glob_pattern:
+            # Autodetect: scansiona i file e imposta il glob corretto
+            reader_type = self._detect_format_from_files()
+            self.glob_pattern = self.FORMAT_GLOBS[reader_type]
+            return reader_type
+
         glob_lower = self.glob_pattern.lower()
-        
-        # 1. Controllo testuale sul pattern (più permissivo)
-        # Cerchiamo l'estensione anche se preceduta da asterischi o seguita da .gz
+
+        # 1. Controllo testuale sul pattern
         if '.json' in glob_lower or 'jsonl' in glob_lower:
             return 'jsonl'
         elif 'parquet' in glob_lower:
             return 'parquet'
-        
-        # 2. Se il pattern è generico (es. *.gz, *.*, data_*), 
-        # dobbiamo per forza guardare i file reali sul disco
-        try:
-            logger.info(f"🔍 Pattern generico rilevato '{self.glob_pattern}'. Analizzo i file in {self.data_folder.path}...")
-            files = self.data_folder.list_files(recursive=self.recursive, glob_pattern=self.glob_pattern)
-            
-            if not files:
-                # Se il listing è vuoto, non possiamo dedurre il tipo
-                raise ValueError(f"Nessun file trovato con il pattern: {self.glob_pattern}")
-            
-            # Analizziamo il primo file trovato
-            first_file = files[0].lower()
-            if any(ext in first_file for ext in ['.jsonl', '.json']):
-                return 'jsonl'
-            elif '.parquet' in first_file:
-                return 'parquet'
-            else:
-                # Se ha .gz ma non sappiamo cosa c'è dentro, default a jsonl (standard della tua ETL)
-                if first_file.endswith('.gz'):
-                    logger.warning(f"File {first_file} ha estensione generica. Assumo JSONL per compatibilità pipeline.")
-                    return 'jsonl'
-                
-                raise ValueError(f"Formato file non riconosciuto: {first_file}")
-                
-        except Exception as e:
-            # Se siamo qui, il listing è fallito o è vuoto. 
-            # Se il pattern finisce per .gz, è quasi certamente un JSONL compresso della tua pipeline precedente.
-            if glob_lower.endswith('.gz'):
-                logger.info("Listing fallito ma pattern .gz rilevato. Fallback su JSONL.")
-                return 'jsonl'
-            
-            raise ValueError(f"Pipeline di mapping: Impossibile determinare il tipo di reader dal glob pattern: {self.glob_pattern}. Errore: {e}")
+
+        # 2. Pattern generico: guarda i file su disco
+        return self._detect_format_from_files()
         
     def _create_reader(self):
         """Crea il reader appropriato basato sul tipo rilevato"""

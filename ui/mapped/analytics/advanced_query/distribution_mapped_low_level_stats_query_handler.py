@@ -13,7 +13,6 @@ import plotly.express as px
 
 from utils.path_utils import to_binded_path, to_internal_path
 from utils.streamlit_func import reset_dashboard_session_state
-from utils.extract_glob import generate_filtered_globs
 from utils.serializer import process_record_for_json
 
 from data_class.repository.table.distribution_repository import DistributionRepository
@@ -739,8 +738,8 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
             query=_compact_sql_query(executed_query),
             derived_from=current_dist.id,
             split=current_dist.split,
-            src_schema=None, 
-            name=f"query__{current_dist.name}",
+            src_schema=None,
+            name=f"query__{destination_path.name}__{current_dist.name}",
             description=f"Risultati query eseguita il {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} su {current_dist.name} dataset.",
             lang=current_dist.lang,
             tags=tags + ["query"],

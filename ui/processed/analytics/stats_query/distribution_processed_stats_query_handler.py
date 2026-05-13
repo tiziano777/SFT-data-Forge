@@ -613,8 +613,8 @@ def _create_query_distribution(st, destination_path: Path, materialize: bool, re
             query=compact_query,
             derived_from=current_dist.id,
             split=current_dist.split,
-            src_schema=None,        # reset: output di query non ha schema sorgente
-            name=f"query__{current_dist.name}",
+            src_schema=None,
+            name=f"query__{destination_path.name}__{current_dist.name}",
             description=(
                 f"Risultati query eseguita il "
                 f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} "

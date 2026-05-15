@@ -542,9 +542,9 @@ def _build_visual_query(data_path: str, file_extension: str, stats_path: str,
     # --- MODIFICA _subpath se folder_name è fornito ---
     if folder_name and folder_name.strip():
         final_query = f"""
-SELECT 
+SELECT
     t.* EXCLUDE (_subpath),
-    split_part(t._subpath, '/', 1) || '/{folder_name.strip()}' AS _subpath
+    '{folder_name.strip()}' AS _subpath
 FROM (
     {base_query}
 ) AS t

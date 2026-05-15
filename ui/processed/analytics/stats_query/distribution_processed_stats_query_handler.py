@@ -402,9 +402,9 @@ def _build_visual_query(data_path: str, file_extension: str, stats_path: str,
         base_query += "\nWHERE " + " AND ".join(where_conditions)
     if folder_name and folder_name.strip():
         return f"""
-SELECT 
+SELECT
     t.* EXCLUDE (_subpath),
-    split_part(t._subpath, '/', 1) || '/{folder_name.strip()}' AS _subpath
+    '{folder_name.strip()}' AS _subpath
 FROM (
     {base_query}
 ) AS t

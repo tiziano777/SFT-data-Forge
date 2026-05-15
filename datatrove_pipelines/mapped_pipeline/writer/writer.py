@@ -69,11 +69,13 @@ class BaseCustomWriter:
         # Pulisci il subpath rimuovendo la lingua se presente (compatibilità vecchi dati)
         subpath = meta.get("_subpath", "")
         if subpath:
+            _LANG_CODES = {'en', 'it', 'fr', 'de', 'es', 'pt', 'nl', 'pl', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi', 'te', 'un'}
             parts = subpath.split('/')
-            if parts and len(parts[-1]) <= 3 and parts[-1].isalpha():
-                lang_code = parts[-1]
-                if lang_code in {'en', 'it', 'fr', 'de', 'es', 'pt', 'nl', 'pl', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi', 'te', 'un'}:
-                    subpath = '/'.join(parts[:-1])
+            if parts and parts[0] in _LANG_CODES:
+                parts = parts[1:]
+            if parts and parts[-1] in _LANG_CODES:
+                parts = parts[:-1]
+            subpath = '/'.join(parts)
         output["_subpath"] = subpath
 
         output["_lang"] = meta.get("_lang", "un")
@@ -114,13 +116,14 @@ class BaseCustomWriter:
             # Rimuovi la lingua dal subpath se è stata aggiunta per errore
             # (compatibilità con vecchi dati del processed_pipeline)
             if distribution_path:
+                _LANG_CODES = {'en', 'it', 'fr', 'de', 'es', 'pt', 'nl', 'pl', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi', 'te', 'un'}
                 parts = distribution_path.split('/')
-                # Se l'ultimo componente è un codice lingua ISO (2-3 caratteri), rimuovilo
-                if parts and len(parts[-1]) <= 3 and parts[-1].isalpha():
-                    lang_code = parts[-1]
-                    # Controlla se è una lingua comune
-                    if lang_code in {'en', 'it', 'fr', 'de', 'es', 'pt', 'nl', 'pl', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi', 'te', 'un'}:
-                        distribution_path = '/'.join(parts[:-1])
+                # Rimuovi lang code sia come primo che come ultimo componente
+                if parts and parts[0] in _LANG_CODES:
+                    parts = parts[1:]
+                if parts and parts[-1] in _LANG_CODES:
+                    parts = parts[:-1]
+                distribution_path = '/'.join(parts)
 
             # Se distribution_path è vuoto o '.', usiamo base
             if not distribution_path or distribution_path == '.':

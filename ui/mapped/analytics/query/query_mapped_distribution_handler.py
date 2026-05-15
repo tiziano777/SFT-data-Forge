@@ -218,15 +218,12 @@ def _execute_sql_query(st):
             # 3. Costruzione della FINAL QUERY
             if folder_name:
                 if has_subpath:
-                    # CASO A: _subpath esiste. Lo trasformiamo usando EXCLUDE 
-                    # per non avere due colonne con lo stesso nome nel risultato
+                    # CASO A: _subpath esiste. Non concateniamo il vecchio valore;
+                    # sostituiamo sempre con il nuovo nome fornito dall'utente
                     final_query = f"""
 SELECT 
     t.* EXCLUDE (_subpath),
-    CASE 
-        WHEN t._subpath IS NOT NULL THEN split_part(t._subpath, '/', 1) || '/{folder_name}'
-        ELSE '/{folder_name}'
-    END AS _subpath
+    '{folder_name}' AS _subpath
 FROM (
     {query_with_limit}
 ) AS t
@@ -237,12 +234,12 @@ FROM (
                     final_query = f"""
 SELECT 
     t.*,
-    '/{folder_name}' AS _subpath
+    '{folder_name}' AS _subpath
 FROM (
     {query_with_limit}
 ) AS t
 """
-                    st.info(f"✨ Colonna `_subpath` non trovata nella sorgente. Creata nuova con valore: '/{folder_name}'")
+                    st.info(f"✨ Colonna `_subpath` non trovata nella sorgente. Creata nuova con valore: '{folder_name}'")
             else:
                 # Nessun folder_name specificato
                 final_query = query_with_limit
@@ -250,6 +247,8 @@ FROM (
 
             # 4. Esecuzione e salvataggio risultati
             st.session_state.original_query = query_clean
+            # Salviamo la query originale anche per il re-fetch in fase di salvataggio
+            st.session_state.original_query_for_save = query_clean
             st.session_state.modified_query = final_query
             st.session_state.result_folder_name = folder_name
             
@@ -406,7 +405,47 @@ def _handle_save_confirmation(st, result, destination_path: Path, materialize_da
         
     with st.spinner("Salvataggio in corso..."):
         if materialize_dataset:
-            success = _save_query_results(st, result, destination_path, repos)
+            # Re-eseguiamo la query con il LIMIT inserito dall'utente per il salvataggio,
+            # in modo analogo a quanto fa il handler dei processed datasets.
+            try:
+                query_original = st.session_state.get('original_query_for_save', '')
+                user_limit = st.session_state.get('limit_results_input', 100)
+                folder_name = st.session_state.get('result_folder_name', '').strip()
+
+                if not query_original:
+                    st.error("❌ Impossibile recuperare la query originale per il salvataggio.")
+                    raise RuntimeError("original_query_for_save non trovata in session_state")
+
+                query_clean = query_original.rstrip(' \t\n\r;')
+                query_lower = query_clean.lower()
+
+                if " limit " in query_lower:
+                    query_with_limit = query_clean
+                else:
+                    query_with_limit = f"{query_clean} LIMIT {user_limit}"
+
+                # Costruiamo la query finale applicando la stessa trasformazione di _subpath
+                if folder_name:
+                    final_save_query = f"""
+SELECT 
+    t.* EXCLUDE (_subpath),
+    '{folder_name}' AS _subpath
+FROM (
+    {query_with_limit}
+) AS t
+"""
+                else:
+                    final_save_query = query_with_limit
+
+                # Eseguiamo la query per ottenere il dataframe da salvare
+                with duckdb.connect() as conn:
+                    full_result_df = conn.execute(final_save_query).fetchdf()
+
+                success = _save_query_results(st, full_result_df, destination_path, repos)
+            except Exception as save_exec_err:
+                logger.error(f"[_handle_save_confirmation] Errore re-esecuzione query per salvataggio: {str(save_exec_err)}", exc_info=True)
+                st.error(f"❌ Errore nella preparazione del salvataggio: {str(save_exec_err)}")
+                success = False
         else:
             success = _create_query_distribution(st, destination_path, False, repos)
     

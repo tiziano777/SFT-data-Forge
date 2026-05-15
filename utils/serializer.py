@@ -180,7 +180,6 @@ def process_record_for_json(record):
         logger.error(f"[serializer.process_record_for_json] Error processing record: {record}, error: {e}")
         return fallback_convert_record(record)
 
-
 def fallback_convert_record(record):
     """
     Conversione di fallback migliorata per record problematici.

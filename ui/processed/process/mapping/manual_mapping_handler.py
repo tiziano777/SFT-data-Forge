@@ -189,6 +189,7 @@ def show_mapping_definition_step(st):
     with col2:
         if st.button("🔍 Procedi alla Validazione", type="primary", use_container_width=True):
             if st.session_state.mapping:
+                st.session_state.manual_validation_results = None
                 st.session_state.manual_current_step = "mapping_validation"
                 st.rerun()
             else:

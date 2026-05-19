@@ -496,3 +496,4 @@ def data_studio_recipe_contract_final_step(st):
         st.session_state.final_recipe_obj = None
         st.session_state.current_stage = "data_studio_recipe_contract_creation"
         st.rerun()
+

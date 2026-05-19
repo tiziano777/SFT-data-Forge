@@ -160,7 +160,7 @@ def show_chat_type_selection_step(st):
             st.selectbox(
                 f"Tipo Chat per {dist.name}",
                 options=[None] + vocab_chat_type,
-                key=f"chat_type_{dist.id}",
+                key=f"chat_type_{dist_id}",
                 on_change=_update_chat_type_in_state,
                 args=(st, dist_id)
             )

@@ -3,7 +3,7 @@ import uuid
 import yaml
 import plotly.graph_objects as go
 from datetime import datetime, timezone
-
+import yaml
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
@@ -292,6 +292,52 @@ def _import_recipe_from_yml(st, data: dict) -> str:
             ))
 
     return f"Recipe '{recipe_entity.name}' importata con successo ({created_strategies} strategies create)."
+
+
+def _construct_recipe_download(recipe, enriched_strategies):
+    """
+    Costruisce la struttura della recipe pronta per l'export in YML.
+    Non tenta di recuperare il contenuto testuale dei system prompts (se non
+    disponibile) — inserisce solo i nomi posizionali.
+    """
+    entries = {}
+    for item in enriched_strategies:
+        s = item["strategy"]
+        dist = item.get("distribution")
+        prompts = item.get("prompt_names", []) or []
+
+        # Chiave: usiamo la URI se presente, altrimenti l'id della distribution
+        key = None
+        if dist and getattr(dist, "uri", None):
+            key = dist.uri
+        else:
+            key = str(getattr(dist, "id", s.distribution_id))
+
+        entries[key] = {
+            "dist_id": str(getattr(dist, "id", s.distribution_id)) if dist else str(s.distribution_id),
+            "dist_name": getattr(dist, "name", None) if dist else None,
+            "dist_uri": getattr(dist, "uri", None) if dist else None,
+            "tokenized_uri": getattr(dist, "tokenized_uri", None) if dist else None,
+            "chat_type": s.template_strategy if s else None,
+            "replica": int(s.replication_factor) if s else 1,
+            "system_prompt": [],
+            "system_prompt_name": list(prompts),
+            "samples": None,
+            "tokens": None,
+            "words": None,
+        }
+
+    download = {
+        "id": str(getattr(recipe, "id", None)) if recipe else None,
+        "name": getattr(recipe, "name", None) if recipe else None,
+        "description": getattr(recipe, "description", None) if recipe else None,
+        "scope": getattr(recipe, "scope", None) if recipe else None,
+        "tasks": getattr(recipe, "tasks", None) if recipe else None,
+        "tags": getattr(recipe, "tags", None) if recipe else None,
+        "derived_from": getattr(recipe, "derived_from", None) if recipe else None,
+        "entries": entries,
+    }
+    return download
 
 
 # ─────────────────────────────────────────────
@@ -648,6 +694,19 @@ def recipe_management_handler(st):
                     if c2.button("✏️", key=f"edit_btn_{recipe.id}", help="Modifica strategies"):
                         st.session_state[f"editing_{recipe.id}"] = True
                         st.rerun()
+                # Always offer a YAML download of the recipe (constructed from DB data)
+                try:
+                    download_struct = _construct_recipe_download(recipe, enriched_strategies)
+                    yaml_str = yaml.dump(download_struct, sort_keys=False)
+                    st.download_button(
+                        label="📥 Download YML",
+                        data=yaml_str,
+                        file_name=f"{recipe.name}_recipe.yaml",
+                        mime="text/yaml",
+                        key=f"download_yml_btn_{recipe.id}",
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to prepare download for recipe {recipe.id}: {e}")
                 
                 _show_delete_confirmation(st, recipe, data["recipe_repo"])
 

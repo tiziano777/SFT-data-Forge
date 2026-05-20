@@ -18,17 +18,41 @@ logger = logging.getLogger(__name__)
 db_manager = get_db_manager()
 dist_repo = DistributionRepository(db_manager)
 
+## # NORMALIZATION HELPER
+def _normalize_recipe_to_unit_values(recipe_dict):
+    """
+    Rinormalizza samples/tokens/words ai valori unitari per entry,
+    dividendo per il fattore di replica. In fase intermedia i valori
+    erano moltiplicati per visibilità; qui li riportiamo a valori per-singola-replica.
+    Ritorna una copia normalizzata senza modificare l'originale.
+    """
+    normalized = {}
+    for dist_id, strategy in recipe_dict.items():
+        entry = strategy.copy()
+        replica = entry.get("replica", 1)
+        if replica and replica > 0:
+            entry["samples"] = int(entry["samples"] / replica)
+            entry["tokens"] = int(entry["tokens"] / replica)
+            entry["words"] = int(entry["words"] / replica)
+        normalized[dist_id] = entry
+    return normalized
+
+
 ## # DOWNLOAD PREPARATION
 def _prepare_recipe_entries_for_download(recipe_dict, recipe_entity=None):
     """
     Costruisce la rappresentazione della recipe pronta per il download.
     - Usa `dist_uri` come chiave delle entries.
     - Converte tutti gli UUID in stringhe.
+    - Rinormalizza samples/tokens/words ai valori unitari (divisi per replica).
     - Restituisce un dizionario con i campi top-level: `id`, `name`, `description`,
       `scope`, `tasks`, `tags`, `derived_from` e `entries`.
     
     Se `recipe_entity` è fornito, prende i metadati top-level da esso.
     """
+    # Normalizza ai valori unitari prima della trasformazione
+    recipe_dict = _normalize_recipe_to_unit_values(recipe_dict)
+
     transformed_entries = {}
 
     for old_key, details in recipe_dict.items():
@@ -379,9 +403,9 @@ def data_studio_recipe_contract_final_step(st):
     
     st.write("### Final Recipe Review, Splitted by Integer and Decimal Replication Strategies")
     st.write("#### Integer Replication Strategies")
-    st.dataframe(int_recipe.values())
+    st.dataframe(_normalize_recipe_to_unit_values(int_recipe).values())
     st.write("#### Fractional Replication Strategies")
-    st.dataframe(float_recipe.values())
+    st.dataframe(_normalize_recipe_to_unit_values(float_recipe).values())
 
     # --- TOGGLE DI MATERIALIZZAZIONE (sempre visibili se esiste float_recipe) ---
     # materialize_choices: { dist_id: bool }

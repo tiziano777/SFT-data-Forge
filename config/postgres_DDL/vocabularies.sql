@@ -74,7 +74,8 @@ CREATE TABLE schema_template (
     "schema" JSONB NOT NULL,
     version TEXT NOT NULL DEFAULT '1.0' CHECK (version ~ '^\d+\.\d+(\.\d+)?$'),
     issued TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    modified TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    mapping_scaffold JSONB DEFAULT '{}'::jsonb NOT NULL
 );
 
 -- Tabella per chat types

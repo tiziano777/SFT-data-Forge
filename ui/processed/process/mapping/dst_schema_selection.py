@@ -4,7 +4,7 @@ from data_class.repository.table.schema_template_repository import SchemaTemplat
 
 logger = logging.getLogger(__name__)
 
-keys_to_delete = ["pipeline_running", "manual_edit_active", "interrupt", "state", "thread_id_mapping","schema_template_id","distribution_id","mapping","dst_schema","back_to_src_schema_btn","target_schema_file_select","selected_target_schema_file", "schema_sample", "selected_languages", "languages_valid"]
+keys_to_delete = ["pipeline_running", "manual_edit_active", "interrupt", "state", "thread_id_mapping","schema_template_id","distribution_id","mapping","dst_schema","dst_mapping_scaffold","back_to_src_schema_btn","target_schema_file_select","selected_target_schema_file", "schema_sample", "selected_languages", "languages_valid"]
 
 
 def get_schema_template_repository(st):
@@ -34,7 +34,8 @@ def select_target_schema_stage(st):
             'id': schema.id,
             'serial': schema.serial,
             'name': schema.name,
-            'schema': schema.schema
+            'schema': schema.schema,
+            'mapping_scaffold': schema.mapping_scaffold,
         })
         names.append(schema.name)
     
@@ -63,7 +64,8 @@ def select_target_schema_stage(st):
     if selected_name and selected_schema_data:
         current_dst_schema_id = selected_schema_data['id']
         st.session_state.dst_schema_id = current_dst_schema_id
-        st.session_state.dst_schema = selected_schema_data['schema'] # Salva il JSON completo
+        st.session_state.dst_schema = selected_schema_data['schema']
+        st.session_state.dst_mapping_scaffold = selected_schema_data['mapping_scaffold']
 
         # 4. Visualizzazione e passaggio di stato
         st.markdown("---")

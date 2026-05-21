@@ -16,6 +16,14 @@ def get_mapping_repository(st):
         raise ValueError("Database manager non trovato nella sessione")
     return MappingRepository(db_manager)
 
+def get_schema_template_repository(st):
+    """Factory function per ottenere il repository SchemaTemplate"""
+    from data_class.repository.table.schema_template_repository import SchemaTemplateRepository
+    db_manager = st.session_state.get('db_manager')
+    if not db_manager:
+        raise ValueError("Database manager non trovato nella sessione")
+    return SchemaTemplateRepository(db_manager)
+
 def validate_manual_mapping(mapping_spec: Dict, src_schema: Dict, dst_schema: Dict, samples: List[Dict]) -> tuple:
     """
     Valida un mapping manuale contro gli schemi e i campioni.
@@ -112,6 +120,13 @@ def get_template_mapping() -> Dict:
         "messages[1].functioncall": ["set_fixed_value", null]
     }""")
 
+def _get_initial_mapping(st) -> Dict:
+    """Usa lo scaffold salvato sul DB per il dst_schema selezionato, o il template di default."""
+    scaffold = st.session_state.get("dst_mapping_scaffold")
+    if scaffold:
+        return scaffold
+    return get_template_mapping()
+
 def show_mapping_definition_step(st):
     """Step 1: Definizione del mapping manuale"""
     
@@ -143,8 +158,8 @@ def show_mapping_definition_step(st):
         st.session_state.manual_current_step = "user_defined_query_option"
         st.rerun()
 
-    # Template precompilato
-    template_mapping = get_template_mapping()
+    # Template precompilato (da scaffold DB o fallback hardcoded)
+    template_mapping = _get_initial_mapping(st)
     
     # Opzione 1: Editor JSON avanzato
     st.markdown("#### Opzione 1: Editor JSON")
@@ -171,6 +186,23 @@ def show_mapping_definition_step(st):
         
         st.markdown("#### 👁️ Anteprima Mapping")
         st.json(mapping_data, expanded=False)
+
+        with st.expander("💾 Salva come template per questo schema"):
+            scaffold_text = st.text_area(
+                "Mapping scaffold (JSON):",
+                value=json.dumps(st.session_state.get("dst_mapping_scaffold") or mapping_data, indent=2),
+                height=200,
+                key="scaffold_editor"
+            )
+            if st.button("Salva template", key="save_scaffold_btn"):
+                try:
+                    scaffold_obj = json.loads(scaffold_text)
+                    schema_repo = get_schema_template_repository(st)
+                    schema_repo.update_mapping_scaffold(st.session_state.dst_schema_id, scaffold_obj)
+                    st.session_state.dst_mapping_scaffold = scaffold_obj
+                    st.success("Template salvato.")
+                except json.JSONDecodeError as e:
+                    st.error(f"JSON non valido: {e}")
         
     except json.JSONDecodeError as e:
         st.error(f"❌ JSON non valido: {e}")

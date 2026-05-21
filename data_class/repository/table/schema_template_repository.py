@@ -93,6 +93,11 @@ class SchemaTemplateRepository:
         with self.db as db:
             return db.execute_command(query, (id,))
 
+    def update_mapping_scaffold(self, id: str, scaffold: Dict[str, Any]) -> int:
+        query = f"UPDATE {self.table} SET mapping_scaffold = %(scaffold)s WHERE id = %(id)s"
+        with self.db as db:
+            return db.execute_command(query, {"scaffold": scaffold, "id": id})
+
     def count_all(self) -> int:
         query = f"SELECT COUNT(*) as count FROM {self.table}"
         with self.db as db:

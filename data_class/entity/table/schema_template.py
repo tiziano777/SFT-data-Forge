@@ -12,4 +12,5 @@ class SchemaTemplate:
     version: str = '1.0'
     issued: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     modified: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    mapping_scaffold: Dict[str, Any] = field(default_factory=dict)
 

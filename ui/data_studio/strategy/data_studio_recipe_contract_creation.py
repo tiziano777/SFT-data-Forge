@@ -206,29 +206,68 @@ def show_system_prompt_selection_step(st):
             new_name = col_n.text_input("Name")
             new_description = col_d.text_input("Description")
             new_prompt = st.text_area("Prompt Content", height=150)
-            
+
+            # Match dedicated form: language, length, quality_score, derived_from
             f_col1, f_col2 = st.columns(2)
-            new_lang = f_col1.selectbox("Language", options=langs)
-            quality_score = f_col2.slider("Quality Score", 0.0, 1.0, 0.7, 0.01)
-            
-            if st.form_submit_button("💾 Save & Refresh Lists"):
-                if new_name and new_prompt:
+            new_lang = f_col1.text_input("Language", value="en")
+            length_input = f_col2.number_input("Length (0 = auto)", min_value=0, value=0)
+
+            q_col1, q_col2 = st.columns(2)
+            quality_score = q_col1.number_input("Quality Score (0.0 - 1.0)", min_value=0.00, max_value=1.00, value=0.00, step=0.05)
+
+            # derived_from options come from current prompts cache
+            derived_from_options = [None] + ( [p.name for p in current_prompts] if current_prompts else [] )
+            derived_from = q_col2.selectbox("Derived From (optional)", options=derived_from_options)
+
+            save_clicked = st.form_submit_button("💾 Save")
+            cancel_clicked = st.form_submit_button("⬅️ Cancel")
+
+            if save_clicked:
+                if not (new_name and new_prompt):
+                    st.error("Name and Prompt are required.")
+                else:
                     try:
-                        from datetime import datetime
                         from data_class.entity.table.system_prompt import SystemPrompt
+                        # resolve derived_from to id if provided
+                        if derived_from:
+                            try:
+                                derived_obj = system_prompt_repo.get_by_name(derived_from)
+                                derived_id = derived_obj.id if derived_obj else None
+                            except Exception:
+                                derived_id = None
+                        else:
+                            derived_id = None
+
+                        length_val = length_input if length_input > 0 else len(new_prompt or "")
                         new_sp = SystemPrompt(
-                            id=None, name=new_name, description=new_description,
-                            prompt=new_prompt, _lang=new_lang, length=len(new_prompt),
-                            quality_score=quality_score, issued=datetime.utcnow(), modified=datetime.utcnow()
+                            id=None,
+                            name=new_name,
+                            description=new_description,
+                            prompt=new_prompt,
+                            _lang=new_lang,
+                            length=length_val,
+                            derived_from=derived_id,
+                            quality_score=quality_score,
+                            deleted=False,
+                            version="1.0",
                         )
-                        system_prompt_repo.insert(new_sp)
+
+                        inserted = system_prompt_repo.insert(new_sp)
+                        # refresh cache
                         st.session_state.system_prompts_cache = system_prompt_repo.get_all()
-                        st.success(f"Prompt '{new_name}' created!")
+
+                        if inserted:
+                            st.success(f"Prompt '{inserted.name}' created!")
+                        else:
+                            st.error("Salvataggio fallito")
+
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error: {e}")
-                else:
-                    st.error("Name and Prompt are required.")
+                        st.error(f"Errore durante il salvataggio: {e}")
+
+            if cancel_clicked:
+                # simply close the expander by rerunning (no explicit state tracked here)
+                st.rerun()
 
     st.write("---")
 

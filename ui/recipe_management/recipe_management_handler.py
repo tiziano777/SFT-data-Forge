@@ -85,6 +85,24 @@ def _show_recipe_metadata_editor(st, recipe, data):
         tasks = st.multiselect("Tasks", TASKS_VOCAB, default=default_tasks)
         tags = st.text_input("Tags (comma separated)", value=default_tags)
 
+        # Derived From (FK) - select existing recipe by name (optional)
+        recipe_names = [""] + [r.name for r in recipe_repo.get_all()]
+        default_derived = getattr(recipe, "derived_from", None)
+        default_derived_name = None
+        if default_derived:
+            try:
+                rf = recipe_repo.get_by_id(default_derived)
+                default_derived_name = rf.name if rf else None
+            except Exception:
+                default_derived_name = None
+
+        if default_derived_name is not None and default_derived_name in recipe_names:
+            default_index = recipe_names.index(default_derived_name)
+        else:
+            default_index = 0
+
+        derived_from = st.selectbox("Derived From (optional)", recipe_names, index=default_index)
+
         c1, c2, _ = st.columns([1, 1, 3])
         save_btn = c1.form_submit_button("💾 Save Metadata", type="primary", use_container_width=True)
         cancel_btn = c2.form_submit_button("❌ Cancel", use_container_width=True)
@@ -97,6 +115,12 @@ def _show_recipe_metadata_editor(st, recipe, data):
                 recipe.scope = scope
                 recipe.tasks = tasks
                 recipe.tags = [t.strip() for t in tags.split(",")] if tags else []
+                # Persist derived_from FK if selected (resolve by name)
+                try:
+                    recipe.derived_from = recipe_repo.get_by_name(derived_from).id if derived_from else None
+                except Exception:
+                    st.warning(f"Derived From '{derived_from}' non trovato, campo ignorato.")
+                    recipe.derived_from = None
                 
                 # Rimuoviamo eventuali riferimenti a 'modified' se presenti nell'oggetto 
                 # per lasciare che il repository lo gestisca internamente se previsto.
@@ -169,7 +193,6 @@ def _validate_yml_structure(data: dict) -> str | None:
         if len(sp_list) != len(sp_names):
             return f"Entry '{uri}': system_prompt e system_prompt_name devono avere la stessa lunghezza."
     return None
-
 
 def _import_recipe_from_yml(st, data: dict) -> str:
     """
@@ -293,7 +316,6 @@ def _import_recipe_from_yml(st, data: dict) -> str:
 
     return f"Recipe '{recipe_entity.name}' importata con successo ({created_strategies} strategies create)."
 
-
 def _construct_recipe_download(recipe, enriched_strategies):
     """
     Costruisce la struttura della recipe pronta per l'export in YML.
@@ -339,7 +361,6 @@ def _construct_recipe_download(recipe, enriched_strategies):
     }
     return download
 
-
 # ─────────────────────────────────────────────
 # EDIT SECTION
 # ─────────────────────────────────────────────
@@ -372,7 +393,6 @@ def _init_edit_widget_keys(st, enriched_strategies):
 
         if f"edit_del_{s_id}" not in st.session_state:
             st.session_state[f"edit_del_{s_id}"] = False
-
 
 def _clear_edit_widget_keys(st, enriched_strategies):
     for item in enriched_strategies:
